@@ -17,20 +17,22 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 class NatsManager:
     def __init__(self, nc: NATS):
         self._nc = nc
-    
+        self._queue = asyncio.Queue()
+        
     async def subscribe(self):
         await self._nc.subscribe('binance.spot.bookTicker.*', cb=self._callback)
         await self._nc.subscribe('binance.linear.bookTicker.*', cb=self._callback)
-        await self._wait()
+        # await self._wait()
         
-    
     async def _callback(self, msg):
         res = msgpack.unpackb(msg.data)
-        await MarketDataStore.update(res)
+        await self._queue.put(res)
     
-    async def _wait(self):
+    async def _process_queue(self):
         while True:
-            await asyncio.sleep(1)
+            res = await self._queue.get()
+            await MarketDataStore.update(res)
+            self._queue.task_done()
     
     
 class ExchangeManager:
