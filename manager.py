@@ -22,7 +22,8 @@ class NatsManager:
     async def subscribe(self):
         await self._nc.subscribe('binance.spot.bookTicker.*', cb=self._callback)
         await self._nc.subscribe('binance.linear.bookTicker.*', cb=self._callback)
-        # await self._wait()
+        asyncio.create_task(self._process_queue())
+        await asyncio.Event().wait()
         
     async def _callback(self, msg):
         res = msgpack.unpackb(msg.data)
