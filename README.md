@@ -9,7 +9,6 @@
 - EventSystem 负责订阅各种事件，包括ratio,order update,position update等事件
 - OrderResponse 封装的order返回
 - MarketDataStore 负责计算ratio
-- Application 集成并启动程序
 
 ## bot.py
 
