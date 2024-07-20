@@ -53,8 +53,8 @@ class OrderResponse:
     
 class MarketDataStore:
     data = defaultdict(dict)
-    bid_ratio = {}
-    ask_ratio = {}
+    open_ratio = {}
+    close_ratio = {}
     
     @classmethod
     async def update(cls, data: Dict):
@@ -79,11 +79,11 @@ class MarketDataStore:
             linear_bid = cls.data[linear_symbol]['bid']
             linear_ask = cls.data[linear_symbol]['ask']
             
-            cls.bid_ratio[spot_symbol] = linear_ask / spot_ask - 1
-            cls.ask_ratio[spot_symbol] = linear_bid / spot_bid - 1
+            # cls.close_ratio[spot_symbol] = linear_bid / spot_bid - 1
+            # cls.open_ratio[spot_symbol] = linear_ask / spot_ask - 1
             
-            await EventSystem.emit('ratio_changed', spot_symbol, cls.bid_ratio[spot_symbol], cls.ask_ratio[spot_symbol])
+            cls.open_ratio[spot_symbol] = linear_ask / spot_ask - 1
+            cls.close_ratio[spot_symbol] = linear_bid / spot_bid - 1
+            
+            await EventSystem.emit('ratio_changed', spot_symbol, cls.open_ratio[spot_symbol], cls.close_ratio[spot_symbol])
 
-    
-class Application:
-    pass

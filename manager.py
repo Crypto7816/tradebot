@@ -1,9 +1,11 @@
+import ssl
 import asyncio
 import logging
 from typing import Literal, Union
 
 
 import msgpack
+import nats
 from nats.aio.client import Client as NATS
 import ccxt.pro as ccxtpro
 
@@ -15,11 +17,22 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 
 class NatsManager:
-    def __init__(self, nc: NATS):
-        self._nc = nc
+    def __init__(self, nats_url = "nats://104.194.152.27:4222", cert_path = "./keys"):
+        self._nc = None
+        self._nats_url = nats_url
+        self._cert_path = cert_path
         self._queue = asyncio.Queue()
+    
+    async def _connect(self):
+        ssl_ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
+        ssl_ctx.load_cert_chain(certfile=f'{self._cert_path}/server-cert.pem',
+                                keyfile=f'{self._cert_path}/server-key.pem')
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+        self._nc = await nats.connect(self._nats_url, tls=ssl_ctx)
         
     async def subscribe(self):
+        await self._connect()
         await self._nc.subscribe('binance.spot.bookTicker.*', cb=self._callback)
         await self._nc.subscribe('binance.linear.bookTicker.*', cb=self._callback)
         asyncio.create_task(self._process_queue())
@@ -62,7 +75,7 @@ class ExchangeManager:
 
 class OrderManager:
     def __init__(self, exchange: ExchangeManager):
-        self.exchange = exchange
+        self._exchange = exchange
 
     async def place_limit_order(
         self,
@@ -75,7 +88,7 @@ class OrderManager:
     ) -> Union[OrderResponse, None]:
         try:
             if close_position:
-                res = await self.exchange.api.create_order(
+                res = await self._exchange.api.create_order(
                     symbol=symbol,
                     type='limit',
                     side = side,
@@ -87,7 +100,7 @@ class OrderManager:
                     }
                 )
             else:
-                res = await self.exchange.api.create_order(
+                res = await self._exchange.api.create_order(
                     symbol=symbol,
                     type='limit',
                     side = side,
@@ -124,7 +137,7 @@ class OrderManager:
     ) -> Union[OrderResponse, None]:
         try:
             if close_position:
-                res = await self.exchange.api.create_order(
+                res = await self._exchange.api.create_order(
                     symbol=symbol,
                     type='market',
                     side = side,
@@ -135,7 +148,7 @@ class OrderManager:
                     }
                 )
             else:
-                res = await self.exchange.api.create_order(
+                res = await self._exchange.api.create_order(
                     symbol=symbol,
                     type='market',
                     side = side,
@@ -164,7 +177,7 @@ class OrderManager:
         
     async def cancel_order(self, order_id: str, symbol: str) -> Union[OrderResponse, None]:
         try:
-            res = await self.exchange.api.cancel_order(id = order_id, symbol = symbol)
+            res = await self._exchange.api.cancel_order(id = order_id, symbol = symbol)
             order_res = OrderResponse(
                 id = res['id'],
                 symbol = res['symbol'],
