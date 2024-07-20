@@ -1,7 +1,7 @@
 import logging
 from typing import List
 
-from utils import EventSystem
+from entity import EventSystem
 from manager import NatsManager, OrderManager, ExchangeManager
 
 class TradingBot:
@@ -11,6 +11,30 @@ class TradingBot:
         self._order = OrderManager(self._exchange)
         self._nats = NatsManager()
         
+        
+        EventSystem.on('new_order', self._on_new_order)
+        EventSystem.on('filled_order', self._on_filled_order)
+        EventSystem.on('partially_filled_order', self._on_partially_filled_order)
+        EventSystem.on('canceled_order', self._on_canceled_order)
+        
+    async def run(self):
+        await self._nats.subscribe()
+        
+    async def _on_new_order(self, order):
+        pass
+    
+    async def _on_filled_order(self, order):
+        pass
+    
+    async def _on_partially_filled_order(self, order):
+        pass
+    
+    async def _on_canceled_order(self, order):
+        pass
+
+class Bot(TradingBot):
+    def __init__(self, config):
+        super().__init__(config)
         self.position = []
         
         EventSystem.on('ratio_changed', self.on_ratio_changed)
@@ -23,8 +47,7 @@ class TradingBot:
             logging.info(f"Closing position for {symbol} at {close_ratio}")
             self.position.remove(symbol)
     
-    async def run(self):
-        await self._nats.subscribe()
+
 
 
         

@@ -10,7 +10,7 @@ from nats.aio.client import Client as NATS
 import ccxt.pro as ccxtpro
 
 
-from utils import OrderResponse, MarketDataStore
+from entity import OrderResponse, MarketDataStore, EventSystem
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -71,6 +71,8 @@ class ExchangeManager:
     
     async def close(self) -> None:
         await self.api.close()
+    
+    
 
 
 class OrderManager:

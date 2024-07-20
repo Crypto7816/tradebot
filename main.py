@@ -1,18 +1,15 @@
-import ssl
 import asyncio
 
 import uvloop
-import nats
 
-from bot import TradingBot
-from manager import NatsManager
+from bot import Bot
 
 
 async def main():
     config = {
         'exchange_id': 'binance',
     }
-    bot = TradingBot(config)
+    bot = Bot(config)
     await bot.run()
 
 
