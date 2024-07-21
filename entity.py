@@ -3,8 +3,8 @@ import asyncio
 
 
 from collections import defaultdict
-from typing import Dict, List, Callable, Any, Literal
 from dataclasses import dataclass, fields
+from typing import Dict, List, Callable, Any, Literal
 
 
 @dataclass

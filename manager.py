@@ -69,22 +69,22 @@ class ExchangeManager:
     async def close(self) -> None:
         await self.api.close()
     
-    async def watch_orders(self, typ = 'linear') -> None:
-        queue = asyncio.Queue()
-        asyncio.create_task(watch_orders(typ=typ, api_key=self.config['apiKey'], queue=queue))
-        asyncio.create_task(self._process_order_queue(queue=queue))
-    
-    async def _process_order_queue(self, queue: asyncio.Queue):
-        while True:
-            res = await queue.get()
-            await EventSystem.emit('order_update', res)
-            queue.task_done()
-    
     
 class OrderManager:
     def __init__(self, exchange: ExchangeManager):
         self._exchange = exchange
         EventSystem.on('order_update', self._on_order_update)
+        
+    async def watch_orders(self, typ = 'linear') -> None:
+        queue = asyncio.Queue()
+        asyncio.create_task(watch_orders(typ=typ, api_key=self._exchange.config['apiKey'], queue=queue))
+        asyncio.create_task(self._process_order_queue(queue=queue))
+    
+    async def _process_order_queue(self, queue: asyncio.Queue):
+        while True:
+            res = await queue.get()
+            asyncio.create_task(EventSystem.emit('order_update', res))
+            queue.task_done()
     
     async def _on_order_update(self, res: Dict):
         if res['e'] == 'ORDER_TRADE_UPDATE':
@@ -172,7 +172,7 @@ class OrderManager:
                 average = res['average'],
                 price = res['price']
             )
-            logging.debug((f"Placed limit {side} order for {symbol} at {order_res['price']}: {order_res['id']} amount: {order_res['amount']}"))
+            logging.info((f"Placed limit {side} order for {symbol} at {order_res['price']}: {order_res['id']} amount: {order_res['amount']}"))
             return order_res
         except Exception as e:
             logging.error(f"Error placing {side} limit order for {symbol} amount: {amount}: {e}")
@@ -219,7 +219,7 @@ class OrderManager:
                 average = res['average'],
                 price= res['price']
             )
-            logging.debug((f"Placed market {side} order for {symbol} at average {order_res['average']}: {order_res['id']} amount: {order_res['amount']}"))
+            logging.info((f"Placed market {side} order for {symbol} at average {order_res['average']}: {order_res['id']} amount: {order_res['amount']}"))
             return order_res
         except Exception as e:
             logging.error(f"Error placing {side} market order for {symbol} amount: {amount}: {e}")
@@ -239,12 +239,8 @@ class OrderManager:
                 average = res['average'],
                 price = res['price']
             )
-            logging.debug(f"Cancelled order {order_id} for {symbol}")
+            logging.info(f"Cancelled order {order_id} for {symbol}")
             return order_res
         except Exception as e:
             logging.error(f"Error cancelling order {order_id} for {symbol}: {e}")
             return None
-    
-
-
-
