@@ -82,8 +82,6 @@ class ExchangeManager:
             self._queue.task_done()
     
     
-    
-    
 class OrderManager:
     def __init__(self, exchange: ExchangeManager):
         self._exchange = exchange
