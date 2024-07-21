@@ -2,7 +2,7 @@ import logging
 import asyncio
 from typing import List
 
-from entity import EventSystem
+from entity import EventSystem, MarketDataStore
 from manager import NatsManager, OrderManager, ExchangeManager
 
 class TradingBot:
@@ -63,7 +63,7 @@ class Bot(TradingBot):
         logging.info(f"Canceled order: {order}")
     
     async def on_ratio_changed(self, symbol: str, open_ratio: float, close_ratio: float):
-        if open_ratio > 0.00065 and symbol not in self.position:            
+        if open_ratio > 0.00065 and symbol not in self.position:   
             logging.info(f"Opening position for {symbol} at {open_ratio}")
             self.position.append(symbol)
         if close_ratio < 0 and symbol in self.position:

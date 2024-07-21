@@ -7,8 +7,10 @@ from typing import Dict, List, Callable, Any, Literal
 from dataclasses import dataclass, fields
 
 
-@dataclass(slots=True)
+@dataclass
 class OrderResponse:
+    __slots__ = ['id', 'symbol', 'status', 'side', 'amount', 'filled', 'client_order_id', 'average', 'price']
+    
     id: str
     symbol: str
     status: str
@@ -42,7 +44,7 @@ class OrderResponse:
 class Quote:
     __slots__ = ['ask', 'bid']
 
-    def __init__(self, ask=0, bid=0):
+    def __init__(self, ask: float = 0, bid: float = 0):
         self.ask = ask
         self.bid = bid
 
@@ -67,14 +69,14 @@ class Quote:
     
     
 class MarketDataStore:
-    data:Dict[str, Quote] = defaultdict(Quote)
+    quote:Dict[str, Quote] = defaultdict(Quote)
     open_ratio = {}
     close_ratio = {}
     
     @classmethod
     async def update(cls, data: Dict):
         symbol = data['s']
-        cls.data[symbol] = Quote(
+        cls.quote[symbol] = Quote(
             ask=float(data['a']),
             bid=float(data['b'])
         )
@@ -88,11 +90,11 @@ class MarketDataStore:
     @classmethod
     async def calculate_ratio(cls, spot_symbol: str):
         linear_symbol = f'{spot_symbol}:USDT'
-        if spot_symbol in cls.data and linear_symbol in cls.data:
-            spot_bid = cls.data[spot_symbol].bid
-            spot_ask = cls.data[spot_symbol].ask
-            linear_bid = cls.data[linear_symbol].bid
-            linear_ask = cls.data[linear_symbol].ask
+        if spot_symbol in cls.quote and linear_symbol in cls.quote:
+            spot_bid = cls.quote[spot_symbol].bid
+            spot_ask = cls.quote[spot_symbol].ask
+            linear_bid = cls.quote[linear_symbol].bid
+            linear_ask = cls.quote[linear_symbol].ask
             
             # cls.close_ratio[spot_symbol] = linear_bid / spot_bid - 1
             # cls.open_ratio[spot_symbol] = linear_ask / spot_ask - 1
