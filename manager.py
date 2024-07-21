@@ -10,7 +10,7 @@ from nats.aio.client import Client as NATS
 import ccxt.pro as ccxtpro
 
 
-from utils import watch_orders, parse_symbol, parse_order_status
+from utils import user_data_stream, parse_symbol, parse_order_status
 from entity import OrderResponse, MarketDataStore, EventSystem
 
 
@@ -50,6 +50,7 @@ class ExchangeManager:
     def __init__(self, config):
         self.config = config
         self.api = self._init_exchange()
+        self._queue = asyncio.Queue()
     
     def _init_exchange(self) -> ccxtpro.Exchange:
         try:
@@ -69,22 +70,24 @@ class ExchangeManager:
     async def close(self) -> None:
         await self.api.close()
     
+    async def watch_user_data_stream(self) -> None:
+        asyncio.create_task(user_data_stream(typ='spot', api_key=self.config['apiKey'], queue=self._queue))
+        asyncio.create_task(user_data_stream(typ='linear', api_key=self.config['apiKey'], queue=self._queue))
+        asyncio.create_task(self._process_queue())
+    
+    async def _process_queue(self):
+        while True:
+            res = await self._queue.get()
+            asyncio.create_task(EventSystem.emit('order_update', res))
+            self._queue.task_done()
+    
+    
+    
     
 class OrderManager:
     def __init__(self, exchange: ExchangeManager):
         self._exchange = exchange
         EventSystem.on('order_update', self._on_order_update)
-        
-    async def watch_orders(self, typ = 'linear') -> None:
-        queue = asyncio.Queue()
-        asyncio.create_task(watch_orders(typ=typ, api_key=self._exchange.config['apiKey'], queue=queue))
-        asyncio.create_task(self._process_order_queue(queue=queue))
-    
-    async def _process_order_queue(self, queue: asyncio.Queue):
-        while True:
-            res = await queue.get()
-            asyncio.create_task(EventSystem.emit('order_update', res))
-            queue.task_done()
     
     async def _on_order_update(self, res: Dict):
         if res['e'] == 'ORDER_TRADE_UPDATE':

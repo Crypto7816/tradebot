@@ -33,7 +33,7 @@ async def keep_alive_listen_key(base_url: str, api_key: str, listen_key: str):
         except Exception as e:
             logging.error(f"Error keeping alive listen key: {e}")
                 
-async def watch_orders(typ: Literal['spot', 'linear', 'inverse'], api_key:str, queue: asyncio.Queue):
+async def user_data_stream(typ: Literal['spot', 'linear', 'inverse'], api_key:str, queue: asyncio.Queue):
     if typ == 'spot':
         base_url = 'https://api.binance.com/api/v3/userDataStream'
         stream_url = 'wss://stream.binance.com:9443/ws/'

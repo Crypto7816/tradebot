@@ -1,9 +1,11 @@
 import logging
+import pickle
 import asyncio
 
 
+from pathlib import Path
 from collections import defaultdict
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, field
 from typing import Dict, List, Callable, Any, Literal
 
 
@@ -123,3 +125,62 @@ class EventSystem:
                 else:
                     callback(*args, **kwargs)
 
+@dataclass
+class Account:
+    USDT: float = 0
+    BNB: float = 0
+    FDUSD: float = 0
+    BTC: float = 0
+    ETH: float = 0
+    USDC: float = 0
+
+    def __init__(self, account_type: str):
+        self.filepath = Path('.context') / f'{account_type}.pkl'
+        self.load_account()
+
+    def __post_init__(self):
+        # dataclass自动调用此方法，此处用于跳过dataclass自动初始化
+        pass
+
+    def __setattr__(self, key, value):
+        object.__setattr__(self, key, value)
+        if key in self.keys():
+            self.save_account()
+
+    def __getitem__(self, key):
+        if key in self.keys():
+            return getattr(self, key)
+        else:
+            raise KeyError(f"{key} is not a valid account field.")
+
+    def __setitem__(self, key, value):
+        if key in self.keys():
+            setattr(self, key, value)
+        else:
+            raise KeyError(f"{key} is not a valid account field.")
+
+    def keys(self):
+        return [f.name for f in fields(self)]
+
+    def save_account(self):
+        """Save account data to a pickle file."""
+        filepath = self.filepath
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        with filepath.open('wb') as file:
+            pickle.dump({field: getattr(self, field) for field in self.keys()}, file)
+
+    def load_account(self):
+        """Load account data from a pickle file, if it exists."""
+        filepath = self.filepath
+        if filepath.exists():
+            with filepath.open('rb') as file:
+                data = pickle.load(file)
+                for key, value in data.items():
+                    setattr(self, key, value)
+        else:
+            # 如果文件不存在，则初始化所有货币为0
+            for field in self.keys():
+                setattr(self, field, 0)
+
+
+    

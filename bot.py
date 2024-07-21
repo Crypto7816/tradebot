@@ -21,8 +21,7 @@ class TradingBot:
     async def run(self):
         await self._exchange.load_markets()
         asyncio.create_task(self._nats.subscribe())
-        asyncio.create_task(self._order.watch_orders(typ='linear'))
-        asyncio.create_task(self._order.watch_orders(typ='spot'))
+        asyncio.create_task(self._exchange.watch_user_data_stream())
         await self._wait()
     
     async def _wait(self):
@@ -48,8 +47,7 @@ class Bot(TradingBot):
     def __init__(self, config):
         super().__init__(config)
         self.position = []
-        
-        # EventSystem.on('ratio_changed', self.on_ratio_changed)
+        EventSystem.on('ratio_changed', self.on_ratio_changed)
 
     async def on_new_order(self, order):
         logging.info(f"New order: {order}")
