@@ -71,13 +71,14 @@ class ExchangeManager:
     
     async def watch_orders(self, typ = 'linear') -> None:
         queue = asyncio.Queue()
-        asyncio.create_task(watch_orders(typ='linear', api_key=self.config['apiKey'], queue=queue))
+        asyncio.create_task(watch_orders(typ=typ, api_key=self.config['apiKey'], queue=queue))
         asyncio.create_task(self._process_order_queue(queue=queue))
     
     async def _process_order_queue(self, queue: asyncio.Queue):
         while True:
             res = await queue.get()
             await EventSystem.emit('order_update', res)
+            queue.task_done()
     
     
 class OrderManager:

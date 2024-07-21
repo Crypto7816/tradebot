@@ -48,8 +48,20 @@ class Bot(TradingBot):
         super().__init__(config)
         self.position = []
         
-        EventSystem.on('ratio_changed', self.on_ratio_changed)
+        # EventSystem.on('ratio_changed', self.on_ratio_changed)
 
+    async def on_new_order(self, order):
+        logging.info(f"New order: {order}")
+    
+    async def on_filled_order(self, order):
+        logging.info(f"Filled order: {order}")
+    
+    async def on_partially_filled_order(self, order):
+        logging.info(f"Partially filled order: {order}")
+    
+    async def on_canceled_order(self, order):
+        logging.info(f"Canceled order: {order}")
+    
     async def on_ratio_changed(self, symbol: str, open_ratio: float, close_ratio: float):
         if open_ratio > 0.00065 and symbol not in self.position:            
             logging.info(f"Opening position for {symbol} at {open_ratio}")
