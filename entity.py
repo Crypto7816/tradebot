@@ -7,24 +7,6 @@ from typing import Dict, List, Callable, Any, Literal
 from dataclasses import dataclass, fields
 
 
-class EventSystem:
-    _listeners: Dict[str, List[Callable]] = {}
-
-    @classmethod
-    def on(cls, event: str, callback: Callable):
-        if event not in cls._listeners:
-            cls._listeners[event] = []
-        cls._listeners[event].append(callback)
-
-    @classmethod
-    async def emit(cls, event: str, *args: Any, **kwargs: Any):
-        if event in cls._listeners:
-            for callback in cls._listeners[event]:
-                if asyncio.iscoroutinefunction(callback):
-                    await callback(*args, **kwargs)
-                else:
-                    callback(*args, **kwargs)
-
 @dataclass(slots=True)
 class OrderResponse:
     id: str
@@ -119,4 +101,23 @@ class MarketDataStore:
             cls.close_ratio[spot_symbol] = linear_ask / spot_bid - 1
             
             await EventSystem.emit('ratio_changed', spot_symbol, cls.open_ratio[spot_symbol], cls.close_ratio[spot_symbol])
+
+
+class EventSystem:
+    _listeners: Dict[str, List[Callable]] = {}
+
+    @classmethod
+    def on(cls, event: str, callback: Callable):
+        if event not in cls._listeners:
+            cls._listeners[event] = []
+        cls._listeners[event].append(callback)
+
+    @classmethod
+    async def emit(cls, event: str, *args: Any, **kwargs: Any):
+        if event in cls._listeners:
+            for callback in cls._listeners[event]:
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(*args, **kwargs)
+                else:
+                    callback(*args, **kwargs)
 
