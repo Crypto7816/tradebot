@@ -14,9 +14,6 @@ from utils import watch_orders, parse_symbol, parse_order_status
 from entity import OrderResponse, MarketDataStore, EventSystem
 
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-
 class NatsManager:
     def __init__(self, nats_url = "nats://104.194.152.27:4222", cert_path = "./keys"):
         self._nc = None

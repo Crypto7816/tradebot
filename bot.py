@@ -20,22 +20,28 @@ class TradingBot:
         
     async def run(self):
         asyncio.create_task(self._nats.subscribe())
+        asyncio.create_task(self._exchange.watch_orders(typ='linear'))
+        asyncio.create_task(self._exchange.watch_orders(typ='spot'))
         await self._wait()
     
     async def _wait(self):
         await asyncio.Event().wait()
         
     async def _on_new_order(self, order):
-        pass
+        if hasattr(self, 'on_new_order'):
+            await self.on_new_order(order)
     
     async def _on_filled_order(self, order):
-        pass
+        if hasattr(self, 'on_filled_order'):
+            await self.on_filled_order(order)
     
     async def _on_partially_filled_order(self, order):
-        pass
+        if hasattr(self, 'on_partially_filled_order'):
+            await self.on_partially_filled_order(order)
     
     async def _on_canceled_order(self, order):
-        pass
+        if hasattr(self, 'on_canceled_order'):
+            await self.on_canceled_order(order)
 
 class Bot(TradingBot):
     def __init__(self, config):
