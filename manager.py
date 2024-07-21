@@ -1,7 +1,7 @@
 import ssl
 import asyncio
 import logging
-from typing import Literal, Union
+from typing import Literal, Union, Dict
 
 
 import msgpack
@@ -10,6 +10,7 @@ from nats.aio.client import Client as NATS
 import ccxt.pro as ccxtpro
 
 
+from utils import watch_orders, parse_symbol, parse_order_status
 from entity import OrderResponse, MarketDataStore, EventSystem
 
 
@@ -36,7 +37,6 @@ class NatsManager:
         await self._nc.subscribe('binance.spot.bookTicker.*', cb=self._callback)
         await self._nc.subscribe('binance.linear.bookTicker.*', cb=self._callback)
         asyncio.create_task(self._process_queue())
-        await asyncio.Event().wait()
         
     async def _callback(self, msg):
         res = msgpack.unpackb(msg.data)
@@ -72,12 +72,63 @@ class ExchangeManager:
     async def close(self) -> None:
         await self.api.close()
     
+    async def watch_orders(self, typ = 'linear') -> None:
+        queue = asyncio.Queue()
+        asyncio.create_task(watch_orders(typ='linear', api_key=self.config['apiKey'], queue=queue))
+        asyncio.create_task(self._process_order_queue(queue=queue))
     
-
-
+    async def _process_order_queue(self, queue: asyncio.Queue):
+        while True:
+            res = await queue.get()
+            await EventSystem.emit('order_update', res)
+    
+    
 class OrderManager:
     def __init__(self, exchange: ExchangeManager):
         self._exchange = exchange
+        EventSystem.on('order_update', self._on_order_update)
+    
+    async def _on_order_update(self, res: Dict):
+        if res['e'] == 'ORDER_TRADE_UPDATE':
+            order = OrderResponse(
+                id = res['o']['i'],
+                symbol = parse_symbol(res['o']['s'], 'linear'),
+                status = parse_order_status(res['o']['X']),
+                side = res['o']['S'].lower(),
+                amount = float(res['o']['q']),
+                filled = float(res['o']['z']),
+                client_order_id= res['o']['c'],
+                average = float(res['o']['ap']),
+                price = float(res['o']['p'])
+            )
+            if order.status == 'new':
+                await EventSystem.emit('new_order', order)
+            elif order.status == 'partially_filled':
+                await EventSystem.emit('partially_filled_order', order)
+            elif order.status == 'filled':
+                await EventSystem.emit('filled_order', order)
+            elif order.status == 'canceled':
+                await EventSystem.emit('canceled_order', order)
+        elif res['e'] == 'executionReport':
+            order = OrderResponse(
+                id = res['i'],
+                symbol = parse_symbol(res['s'], 'spot'),
+                status = parse_order_status(res['X']),
+                side = res['S'].lower(),
+                amount = float(res['q']),
+                filled = float(res['z']),
+                client_order_id= res['c'],
+                average = float(res['p']),
+                price = float(res['p'])
+            )
+            if order.status == 'new':
+                await EventSystem.emit('new_order', order)
+            elif order.status == 'partially_filled':
+                await EventSystem.emit('partially_filled_order', order)
+            elif order.status == 'filled':
+                await EventSystem.emit('filled_order', order)
+            elif order.status == 'canceled':
+                await EventSystem.emit('canceled_order', order)
 
     async def place_limit_order(
         self,
@@ -176,7 +227,6 @@ class OrderManager:
             logging.error(f"Error placing {side} market order for {symbol} amount: {amount}: {e}")
             return None
             
-        
     async def cancel_order(self, order_id: str, symbol: str) -> Union[OrderResponse, None]:
         try:
             res = await self._exchange.api.cancel_order(id = order_id, symbol = symbol)

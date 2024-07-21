@@ -8,6 +8,9 @@ from bot import Bot
 async def main():
     config = {
         'exchange_id': 'binance',
+        'sandbox': False,
+        'apiKey': 'your-api-key',
+        'secret': 'your-secret', 
     }
     bot = Bot(config)
     await bot.run()

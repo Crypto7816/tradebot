@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from typing import List
 
 from entity import EventSystem
@@ -18,7 +19,11 @@ class TradingBot:
         EventSystem.on('canceled_order', self._on_canceled_order)
         
     async def run(self):
-        await self._nats.subscribe()
+        asyncio.create_task(self._nats.subscribe())
+        await self._wait()
+    
+    async def _wait(self):
+        await asyncio.Event().wait()
         
     async def _on_new_order(self, order):
         pass
@@ -40,7 +45,7 @@ class Bot(TradingBot):
         EventSystem.on('ratio_changed', self.on_ratio_changed)
 
     async def on_ratio_changed(self, symbol: str, open_ratio: float, close_ratio: float):
-        if open_ratio > 0.00065 and symbol not in self.position:
+        if open_ratio > 0.00065 and symbol not in self.position:            
             logging.info(f"Opening position for {symbol} at {open_ratio}")
             self.position.append(symbol)
         if close_ratio < 0 and symbol in self.position:

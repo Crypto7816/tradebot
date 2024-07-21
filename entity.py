@@ -1,22 +1,29 @@
-from collections import defaultdict
 import logging
-from typing import Dict, Literal
+import asyncio
+
+
+from collections import defaultdict
+from typing import Dict, List, Callable, Any, Literal
 from dataclasses import dataclass, fields
 
 
 class EventSystem:
-    listeners = defaultdict(list)
+    _listeners: Dict[str, List[Callable]] = {}
 
     @classmethod
-    async def emit(cls, event, *args):
-        logging.debug(f"Emitting event: {event}")
-        for listener in cls.listeners[event]:
-            await listener(*args)
+    def on(cls, event: str, callback: Callable):
+        if event not in cls._listeners:
+            cls._listeners[event] = []
+        cls._listeners[event].append(callback)
 
     @classmethod
-    def on(cls, event, callback):
-        cls.listeners[event].append(callback)
-        logging.debug(f"Added listener for event: {event}")
+    async def emit(cls, event: str, *args: Any, **kwargs: Any):
+        if event in cls._listeners:
+            for callback in cls._listeners[event]:
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(*args, **kwargs)
+                else:
+                    callback(*args, **kwargs)
 
 @dataclass
 class OrderResponse:
@@ -82,8 +89,8 @@ class MarketDataStore:
             # cls.close_ratio[spot_symbol] = linear_bid / spot_bid - 1
             # cls.open_ratio[spot_symbol] = linear_ask / spot_ask - 1
             
-            cls.open_ratio[spot_symbol] = linear_ask / spot_ask - 1
-            cls.close_ratio[spot_symbol] = linear_bid / spot_bid - 1
+            cls.open_ratio[spot_symbol] = linear_bid / spot_ask - 1
+            cls.close_ratio[spot_symbol] = linear_ask / spot_bid - 1
             
             await EventSystem.emit('ratio_changed', spot_symbol, cls.open_ratio[spot_symbol], cls.close_ratio[spot_symbol])
 
