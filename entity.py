@@ -11,7 +11,7 @@ from typing import Dict, List, Callable, Any, Literal
 
 @dataclass
 class OrderResponse:
-    __slots__ = ['id', 'symbol', 'status', 'side', 'amount', 'filled', 'client_order_id', 'average', 'price']
+    __slots__ = ['id', 'symbol', 'status', 'side', 'amount', 'filled', 'last_filled', 'client_order_id', 'average', 'price']
     
     id: str
     symbol: str
@@ -19,6 +19,7 @@ class OrderResponse:
     side: Literal['buy', 'sell']
     amount: float
     filled: float
+    last_filled: float 
     client_order_id: str
     average: float
     price: float

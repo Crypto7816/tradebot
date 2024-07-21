@@ -54,12 +54,7 @@ async def user_data_stream(typ: Literal['spot', 'linear', 'inverse'], api_key:st
         while True:
             message = await ws.recv()
             res = json.loads(message)
-            if typ == 'spot':
-                if res['e'] == 'executionReport':
-                    await queue.put(res)
-            else:
-                if res['e'] == 'ORDER_TRADE_UPDATE':
-                    await queue.put(res)
+            await queue.put(res)
 
 
 def parse_order_status(status: str):

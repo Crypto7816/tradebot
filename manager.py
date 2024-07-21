@@ -78,7 +78,14 @@ class ExchangeManager:
     async def _process_queue(self):
         while True:
             res = await self._queue.get()
-            asyncio.create_task(EventSystem.emit('order_update', res))
+            if res['e'] == 'executionReport':
+                asyncio.create_task(EventSystem.emit('order_update', res, 'spot'))
+            elif res['e'] == 'ORDER_TRADE_UPDATE':
+                asyncio.create_task(EventSystem.emit('order_update', res, 'linear'))
+            elif res['e'] == 'ACCOUNT_UPDATE':
+                logging.info(res)
+            elif res['e'] == 'outboundAccountPosition':
+                logging.info(res)
             self._queue.task_done()
     
     
@@ -87,8 +94,8 @@ class OrderManager:
         self._exchange = exchange
         EventSystem.on('order_update', self._on_order_update)
     
-    async def _on_order_update(self, res: Dict):
-        if res['e'] == 'ORDER_TRADE_UPDATE':
+    async def _on_order_update(self, res: Dict, typ: Literal['spot', 'linear']):
+        if typ == 'linear':
             order = OrderResponse(
                 id = res['o']['i'],
                 symbol = parse_symbol(res['o']['s'], 'linear'),
@@ -96,19 +103,12 @@ class OrderManager:
                 side = res['o']['S'].lower(),
                 amount = float(res['o']['q']),
                 filled = float(res['o']['z']),
+                last_filled= float(res['o']['l']),
                 client_order_id= res['o']['c'],
                 average = float(res['o']['ap']),
                 price = float(res['o']['p'])
             )
-            if order.status == 'new':
-                await EventSystem.emit('new_order', order)
-            elif order.status == 'partially_filled':
-                await EventSystem.emit('partially_filled_order', order)
-            elif order.status == 'filled':
-                await EventSystem.emit('filled_order', order)
-            elif order.status == 'canceled':
-                await EventSystem.emit('canceled_order', order)
-        elif res['e'] == 'executionReport':
+        elif typ == 'spot':
             order = OrderResponse(
                 id = res['i'],
                 symbol = parse_symbol(res['s'], 'spot'),
@@ -116,18 +116,19 @@ class OrderManager:
                 side = res['S'].lower(),
                 amount = float(res['q']),
                 filled = float(res['z']),
+                last_filled= float(res['l']),
                 client_order_id= res['c'],
                 average = float(res['p']),
                 price = float(res['p'])
             )
-            if order.status == 'new':
-                await EventSystem.emit('new_order', order)
-            elif order.status == 'partially_filled':
-                await EventSystem.emit('partially_filled_order', order)
-            elif order.status == 'filled':
-                await EventSystem.emit('filled_order', order)
-            elif order.status == 'canceled':
-                await EventSystem.emit('canceled_order', order)
+        if order.status == 'new':
+            await EventSystem.emit('new_order', order)
+        elif order.status == 'partially_filled':
+            await EventSystem.emit('partially_filled_order', order)
+        elif order.status == 'filled':
+            await EventSystem.emit('filled_order', order)
+        elif order.status == 'canceled':
+            await EventSystem.emit('canceled_order', order)
 
     async def place_limit_order(
         self,
