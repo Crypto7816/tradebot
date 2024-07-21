@@ -48,7 +48,7 @@ class Bot(TradingBot):
         super().__init__(config)
         self.position = []
         
-        # EventSystem.on('ratio_changed', self.on_ratio_changed)
+        EventSystem.on('ratio_changed', self.on_ratio_changed)
 
     async def on_new_order(self, order):
         logging.info(f"New order: {order}")
