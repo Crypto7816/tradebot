@@ -170,6 +170,7 @@ class OrderManager:
                 side = res['side'],
                 amount = res['amount'],
                 filled = res['filled'],
+                last_filled = 0,
                 client_order_id = res['clientOrderId'],
                 average = res['average'],
                 price = res['price']
@@ -217,6 +218,7 @@ class OrderManager:
                 side = res['side'],
                 amount = res['amount'],
                 filled = res['filled'],
+                last_filled = 0,
                 client_order_id = res['clientOrderId'],
                 average = res['average'],
                 price= res['price']
@@ -237,6 +239,7 @@ class OrderManager:
                 side = res['side'],
                 amount = res['amount'],
                 filled = res['filled'],
+                last_filled = 0,
                 client_order_id = res['clientOrderId'],
                 average = res['average'],
                 price = res['price']

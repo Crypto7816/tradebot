@@ -1,3 +1,4 @@
 *.cfg
 *.pem
 __pycache__
+.context

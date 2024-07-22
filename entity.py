@@ -183,5 +183,61 @@ class Account:
             for field in self.keys():
                 setattr(self, field, 0)
 
+@dataclass
+class Position:
+    symbol: str = None
+    amount: float = 0.0
+    last_price: float = 0.0
+    avg_price: float = 0.0
+    total_cost: float = 0.0
+
+    def update(self, order_amount, order_price):
+        self.total_cost += order_amount * order_price
+        self.amount += order_amount
+        self.avg_price = self.total_cost / self.amount if self.amount != 0 else 0
+        self.last_price = order_price
+
+class PositionDict(Dict):
+    def __init__(self):
+        super().__init__()
+        self.file_path = Path(".context/positions.pkl")
+        self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        self.load_positions()
+
+    def __setitem__(self, key: str, value: Position):
+        super().__setitem__(key, value)
+        self.save_positions()
+
+    def update(self, symbol: str, order_amount: float, order_price: float):
+        if symbol not in self:
+            self[symbol] = Position(symbol=symbol)
+        self[symbol].update(order_amount, order_price)
+        self.save_positions()
+
+    def load_positions(self):
+        if self.file_path.exists():
+            with self.file_path.open('rb') as f:
+                positions = pickle.load(f)
+                for key, value in positions.items():
+                    self[key] = value
+
+    def save_positions(self):
+        with self.file_path.open('wb') as f:
+            pickle.dump(dict(self), f)
+
+if __name__ == "__main__":
+    positions = PositionDict()
+    # positions.update('BTC/USDT', 1, 50000)
+    # positions.update('BTC/USDT', -10, 60000)
+    # positions.update('ETH/USDT', 1, 3000)
+    # positions.update('ETH/USDT', 2, 4000)
+    
+    print(positions)
+
+    
+
+    
+    
+    
 
     
