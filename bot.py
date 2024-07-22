@@ -55,8 +55,8 @@ class Bot(TradingBot):
         super().__init__(config)
         self.client_id = 'client_cloudzy_bot'
         self.order_ids = {}
-        self.openpx = defaultdict(0)
-        self.level_time = defaultdict(0)
+        self.openpx = defaultdict(float)
+        self.level_time = defaultdict(float)
         EventSystem.on('ratio_changed', self.on_ratio_changed)
 
     async def on_new_order(self, order: OrderResponse):
@@ -127,7 +127,6 @@ class Bot(TradingBot):
                     open_ratio=open_ratio,
                 )
             )
-    
     
     async def order_linear(
         self,
