@@ -3,13 +3,14 @@ import asyncio
 from typing import List
 
 from entity import EventSystem, MarketDataStore
-from manager import NatsManager, OrderManager, ExchangeManager
+from manager import NatsManager, OrderManager, ExchangeManager, AccountManager
 
 class TradingBot:
     def __init__(self, config):
         self._config = config
         self._exchange = ExchangeManager(config)
         self._order = OrderManager(self._exchange)
+        self._account = AccountManager(self._exchange)
         self._nats = NatsManager()
         
         

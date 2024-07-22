@@ -7,6 +7,7 @@ import websockets
 
 
 from typing import Literal, Dict
+from entity import Context
 
 
 async def get_listen_key(base_url: str, api_key: str):
@@ -75,6 +76,20 @@ def parse_symbol(symbol: str, typ: Literal['spot', 'linear']):
         return symbol.replace('USDT', '/USDT')
     elif typ == 'linear':
         return symbol.replace('USDT', '/USDT:USDT')
+
+def parse_account_update(res: Dict, typ: Literal['spot', 'future'], context: Context):
+    base_asset = ['USDT', 'BTC', 'ETH', 'BNB', 'USDC', 'FDUSD']
+    if typ == 'future':
+        balance = res['a']['B']
+        for data in balance:
+            if data['a'] in base_asset:
+                context.futures_account[data['a']] = float(data['wb'])
+    elif typ == 'spot':
+        balance = res['B']
+        for data in balance:
+            if data['a'] in base_asset:
+                context.spot_account[data['a']] = float(data['f'])
+            
     
 
 

@@ -10,8 +10,8 @@ from nats.aio.client import Client as NATS
 import ccxt.pro as ccxtpro
 
 
-from utils import user_data_stream, parse_symbol, parse_order_status
-from entity import OrderResponse, MarketDataStore, EventSystem
+from utils import user_data_stream, parse_symbol, parse_order_status, parse_account_update
+from entity import OrderResponse, MarketDataStore, EventSystem, context
 
 
 class NatsManager:
@@ -52,7 +52,7 @@ class ExchangeManager:
         self.api = self._init_exchange()
         self._queue = asyncio.Queue()
     
-    def _init_exchange(self) -> ccxtpro.Exchange:
+    def _init_exchange(self) -> Union[ccxtpro.Exchange, ccxtpro.binance]:
         try:
             exchange_class = getattr(ccxtpro, self.config['exchange_id'])
         except AttributeError:
@@ -83,12 +83,31 @@ class ExchangeManager:
             elif res['e'] == 'ORDER_TRADE_UPDATE':
                 asyncio.create_task(EventSystem.emit('order_update', res, 'linear'))
             elif res['e'] == 'ACCOUNT_UPDATE':
-                logging.info(res)
+                asyncio.create_task(EventSystem.emit('account_update', res, 'future'))
             elif res['e'] == 'outboundAccountPosition':
-                logging.info(res)
+                asyncio.create_task(EventSystem.emit('account_update', res, 'spot'))
             self._queue.task_done()
+
+
+class AccountManager:
+    def __init__(self, exchange: ExchangeManager):
+        self._exchange = exchange
+        EventSystem.on('account_update', self._on_account_update)
+        EventSystem.on('position_update', self._on_position_update)
     
+    def _on_account_update(self, res: Dict, typ: Literal['spot', 'future']):
+        parse_account_update(res, typ, context)
+        logging.info(f"Updated account info: {context}")
     
+    def _on_position_update(self, order: OrderResponse):
+        if order.side == 'buy':
+            amount = order.last_filled
+        elif order.side == 'sell':
+            amount = -order.last_filled
+        
+        context.position.update(symbol=order.symbol, order_amount=amount, order_price=order.price)
+            
+
 class OrderManager:
     def __init__(self, exchange: ExchangeManager):
         self._exchange = exchange
@@ -129,6 +148,7 @@ class OrderManager:
             await EventSystem.emit('filled_order', order)
         elif order.status == 'canceled':
             await EventSystem.emit('canceled_order', order)
+        await EventSystem.emit('position_update', order)
 
     async def place_limit_order(
         self,
@@ -249,3 +269,4 @@ class OrderManager:
         except Exception as e:
             logging.error(f"Error cancelling order {order_id} for {symbol}: {e}")
             return None
+

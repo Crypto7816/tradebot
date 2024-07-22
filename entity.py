@@ -224,15 +224,27 @@ class PositionDict(Dict):
     def save_positions(self):
         with self.file_path.open('wb') as f:
             pickle.dump(dict(self), f)
+        
 
-if __name__ == "__main__":
-    positions = PositionDict()
-    # positions.update('BTC/USDT', 1, 50000)
-    # positions.update('BTC/USDT', -10, 60000)
-    # positions.update('ETH/USDT', 1, 3000)
-    # positions.update('ETH/USDT', 2, 4000)
+class Context:
+    def __init__(self): 
+        self.spot_account = Account('spot_account')
+        self.futures_account = Account('futures_account')
+        self.position = PositionDict()
     
-    print(positions)
+    def __repr__(self) -> str:
+        return f"Spot Account: {self.spot_account}\nFutures Account: {self.futures_account}\nPositions: {self.position}"
+
+
+context = Context()
+
+
+
+
+
+
+
+
 
     
 
