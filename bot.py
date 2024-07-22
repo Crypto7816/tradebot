@@ -4,8 +4,11 @@ import asyncio
 from typing import List
 
 
-from utils import spot_2_linear, linear_2_spot
-from entity import EventSystem, MarketDataStore, OrderResponse
+from collections import defaultdict
+
+
+from utils import spot_2_linear, linear_2_spot, is_linear
+from entity import EventSystem, MarketDataStore, OrderResponse, context
 from manager import NatsManager, OrderManager, ExchangeManager, AccountManager
 
 class TradingBot:
@@ -50,34 +53,83 @@ class TradingBot:
 class Bot(TradingBot):
     def __init__(self, config):
         super().__init__(config)
-        self.client_id = 'client_cloudzy_2'
-        self.position = []
+        self.client_id = 'client_cloudzy_bot'
         self.order_ids = {}
+        self.openpx = defaultdict(0)
+        self.level_time = defaultdict(0)
         EventSystem.on('ratio_changed', self.on_ratio_changed)
 
     async def on_new_order(self, order: OrderResponse):
-        id = order['id']
+        if order.client_order_id == self.client_id and is_linear(order.symbol):
+            id = order.id
+            self.order_ids[id] = order.filled
 
+    async def on_partially_filled_order(self, order: OrderResponse):
+        if order.client_order_id == self.client_id and is_linear(order.symbol):
+            id = order.id
+            filled = order.filled
+            symbol = linear_2_spot(order.symbol)
+            linear_average = order.average
+            amount = filled - self.order_ids.get(id, 0)
+            res = await self.order_spot(order, symbol, amount)
+            spot_average = res['average']
+            self.openpx[symbol] = spot_average / linear_average - 1
+            logging.info(f'[PARTIALLY FILLED ORDER] Symbol: {symbol} Amount: {res["filled"]} Basis: {self.openpx[symbol]}')
+            self.order_ids[id] = filled - amount + res['filled']
+        
+    async def on_filled_order(self, order: OrderResponse):
+        if order.client_order_id == self.client_id and is_linear(order.symbol):
+            id = order.id
+            symbol = linear_2_spot(order.symbol)
+            filled = order.filled
+            linear_average = order.average
+            if id in self.order_ids:
+                amount = filled - self.order_ids.get(id, 0)
+                res = await self.order_spot(order, symbol, amount)
+                spot_average = res['average']
+                self.openpx[symbol] = spot_average / linear_average - 1
+                logging.info(f'[FILLED ORDER] Symbol: {symbol} Amount: {res["filled"]} Basis: {self.openpx[symbol]}')
+                self.order_ids.pop(id, None)
+            else:
+                logging.info(f'[SOCKET DELAY] Symbol: {symbol} already filled')
+                
+    async def on_canceled_order(self, order: OrderResponse):
+        if order.client_order_id == self.client_id and is_linear(order.symbol):
+            id = order.id 
+            self.order_ids.pop(id, None)
         
     
-    async def on_filled_order(self, order):
-        logging.info(f"Filled order: {order}")
-    
-    async def on_partially_filled_order(self, order):
-        logging.info(f"Partially filled order: {order}")
-    
-    async def on_canceled_order(self, order):
-        logging.info(f"Canceled order: {order}")
-    
     async def on_ratio_changed(self, symbol: str, open_ratio: float, close_ratio: float):
-        if open_ratio > 0.00065 and symbol not in self.position:   
-            logging.info(f"Opening position for {symbol} at {open_ratio}")
-            self.position.append(symbol)
-        if close_ratio < 0 and symbol in self.position:
+        
+        spread_ratio = 0.00065
+        time_ratio = 2
+        
+        mask_open = open_ratio > spread_ratio and symbol not in context.position
+        mask_diverge = close_ratio < self.openpx[symbol] - spread_ratio * time_ratio ** self.level_time[symbol] and symbol in context.position
+        
+
+        if mask_diverge:
             logging.info(f"Closing position for {symbol} at {close_ratio}")
-            self.position.remove(symbol)
+            asyncio.create_task(
+                self.order_linear(
+                    symbol=symbol,
+                    amount=context.position[symbol].amount,
+                    close_position=True,
+                    open_ratio=close_ratio,
+                )
+            )
+        if mask_open:
+            logging.info(f"Opening position for {symbol} at {open_ratio}")
+            asyncio.create_task(
+                self.order_linear(
+                    symbol=symbol,
+                    notional=20,
+                    open_ratio=open_ratio,
+                )
+            )
     
-    async def open_position(
+    
+    async def order_linear(
         self,
         symbol: str, # spot
         amount: float = None,
@@ -148,13 +200,12 @@ class Bot(TradingBot):
             
             if order_placed and res:
                 order_res = await self._exchange.api.fetch_order(id=res['id'], symbol=linear_symbol)
-                #TODO check if order is filled
-                # if order_res['status'] == 'closed':
-                #     logging.info(f"Order {res['id']} for {linear_symbol} has been filled.")
-                #     if res['id'] in self.orders:
-                #         logging.info(f"[SOCKET DELAY] Symbol: {symbol}")
-                #         await self.on_filled_order(order_res)
-                #     return True
+                if order_res['status'] == 'closed':
+                    logging.info(f"Order {res['id']} for {linear_symbol} has been filled.")
+                    if res['id'] in self.order_ids:
+                        logging.info(f"[SOCKET DELAY] Symbol: {symbol}")
+                        await self.on_filled_order(order_res)
+                    return True
             
             if close_position:
                 if order_placed and curr_spot_bid != spot_bid: # if curr_spot_bid changes, cancel the order
@@ -189,6 +240,25 @@ class Bot(TradingBot):
                 return True
             
             await asyncio.sleep(time_interval)
+    
+    async def order_spot(self, order: OrderResponse, symbol: str, amount: float):
+        if order['side'] == 'buy': # close position of linear side
+            res = await self._order.place_market_order(
+                symbol=symbol,
+                side='sell',
+                amount=amount,
+                client_order_id=self.client_id,
+            )
+            # logging.info(f"Place Market Order for {res['symbol']}: {amount}")
+        elif order['side'] == 'sell':
+            res = await self._order.place_market_order(
+                symbol=symbol,
+                side='buy',
+                amount=amount,
+                client_order_id=self.client_id,
+            )
+            # logging.info(f"Place Market Order for {res['symbol']}: {amount}")
+        return res
         
 
 

@@ -160,7 +160,7 @@ class Position:
         self.avg_price = self.total_cost / self.amount if self.amount != 0 else 0
         self.last_price = order_price
 
-class PositionDict(Dict):
+class PositionDict(Dict[str, Position]):
     def __init__(self):
         super().__init__()
         self.file_path = Path(".context/positions.pkl")
@@ -175,6 +175,10 @@ class PositionDict(Dict):
         if symbol not in self:
             self[symbol] = Position(symbol=symbol)
         self[symbol].update(order_amount, order_price)
+        
+        if self[symbol].amount == 0:
+            del self[symbol]
+            
         self.save_positions()
 
     def load_positions(self):

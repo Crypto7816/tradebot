@@ -102,4 +102,10 @@ def linear_2_spot(symbol: str):
     else:
         return symbol
 
+def is_linear(symbol: str):
+    return ':' in symbol
+
+def is_spot(symbol: str):
+    return ':' not in symbol
+
 
