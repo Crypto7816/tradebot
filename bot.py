@@ -10,7 +10,7 @@ class TradingBot:
         self._config = config
         self._exchange = ExchangeManager(config)
         self._order = OrderManager(self._exchange)
-        self._account = AccountManager(self._exchange)
+        self._account = AccountManager()
         self._nats = NatsManager()
         
         

@@ -90,8 +90,7 @@ class ExchangeManager:
 
 
 class AccountManager:
-    def __init__(self, exchange: ExchangeManager):
-        self._exchange = exchange
+    def __init__(self):
         EventSystem.on('account_update', self._on_account_update)
         EventSystem.on('position_update', self._on_position_update)
     
