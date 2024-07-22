@@ -122,6 +122,7 @@ class OrderManager:
                 amount = float(res['o']['q']),
                 filled = float(res['o']['z']),
                 last_filled= float(res['o']['l']),
+                remaining=0,
                 client_order_id= res['o']['c'],
                 average = float(res['o']['ap']),
                 price = float(res['o']['p'])
@@ -135,6 +136,7 @@ class OrderManager:
                 amount = float(res['q']),
                 filled = float(res['z']),
                 last_filled= float(res['l']),
+                remaining=0,
                 client_order_id= res['c'],
                 average = float(res['p']),
                 price = float(res['p'])
@@ -190,6 +192,7 @@ class OrderManager:
                 amount = res['amount'],
                 filled = res['filled'],
                 last_filled = 0,
+                remaining = res['remaining'],
                 client_order_id = res['clientOrderId'],
                 average = res['average'],
                 price = res['price']
@@ -238,6 +241,7 @@ class OrderManager:
                 amount = res['amount'],
                 filled = res['filled'],
                 last_filled = 0,
+                remaining = res['remaining'],
                 client_order_id = res['clientOrderId'],
                 average = res['average'],
                 price= res['price']
@@ -259,6 +263,7 @@ class OrderManager:
                 amount = res['amount'],
                 filled = res['filled'],
                 last_filled = 0,
+                remaining= res['remaining'],
                 client_order_id = res['clientOrderId'],
                 average = res['average'],
                 price = res['price']
