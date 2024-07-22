@@ -1,7 +1,7 @@
 import time
 import logging
 import asyncio
-from typing import List
+from typing import List, Dict
 
 
 from collections import defaultdict
@@ -53,10 +53,11 @@ class TradingBot:
 class Bot(TradingBot):
     def __init__(self, config):
         super().__init__(config)
-        self.client_id = 'client_cloudzy_bot'
+        self.client_id = 'client_cloudzy_4'
         self.order_ids = {}
         self.openpx = defaultdict(float)
-        self.level_time = defaultdict(float)
+        self.level_time = defaultdict(int)
+        self.pending_tasks: Dict[str, asyncio.Task] = {}
         EventSystem.on('ratio_changed', self.on_ratio_changed)
 
     async def on_new_order(self, order: OrderResponse):
@@ -100,33 +101,45 @@ class Bot(TradingBot):
         
     
     async def on_ratio_changed(self, symbol: str, open_ratio: float, close_ratio: float):
-        
         spread_ratio = 0.00065
         time_ratio = 2
         
         mask_open = open_ratio > spread_ratio and symbol not in context.position
         mask_diverge = close_ratio < self.openpx[symbol] - spread_ratio * time_ratio ** self.level_time[symbol] and symbol in context.position
         
+        if symbol in self.pending_tasks:
+            if not self.pending_tasks[symbol].done():
+                # 如果任务还在执行，我们不创建新任务
+                return
+            # 如果任务已完成，我们从字典中移除它
+            self.pending_tasks.pop(symbol)
 
-        if mask_diverge:
-            logging.info(f"Closing position for {symbol} at {close_ratio}")
-            asyncio.create_task(
-                self.order_linear(
+        task = asyncio.create_task(self._process_symbol(symbol, mask_diverge, mask_open, open_ratio, close_ratio))
+        self.pending_tasks[symbol] = task
+        task.add_done_callback(lambda _: self._task_done(symbol))
+
+    async def _process_symbol(self, symbol: str, mask_diverge: bool, mask_open: bool, open_ratio: float, close_ratio: float):
+        try:
+            if mask_diverge:
+                logging.info(f"Closing position for {symbol} at {close_ratio}")
+                await self.order_linear(
                     symbol=symbol,
                     amount=context.position[symbol].amount,
                     close_position=True,
                     open_ratio=close_ratio,
                 )
-            )
-        if mask_open:
-            logging.info(f"Opening position for {symbol} at {open_ratio}")
-            asyncio.create_task(
-                self.order_linear(
+            elif mask_open:
+                logging.info(f"Opening position for {symbol} at {open_ratio}")
+                await self.order_linear(
                     symbol=symbol,
                     notional=20,
                     open_ratio=open_ratio,
                 )
-            )
+        except Exception as e:
+            logging.error(f"Error processing {symbol}: {e}")
+
+    def _task_done(self, symbol: str):
+        self.pending_tasks.pop(symbol, None)
     
     async def order_linear(
         self,
