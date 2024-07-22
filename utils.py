@@ -89,7 +89,17 @@ def parse_account_update(res: Dict, typ: Literal['spot', 'future'], context: Con
         for data in balance:
             if data['a'] in base_asset:
                 context.spot_account[data['a']] = float(data['f'])
+
+def spot_2_linear(symbol: str):
+    if symbol.endswith(':USDT'):
+        return symbol
+    else:
+        return symbol + ':USDT'
             
-    
+def linear_2_spot(symbol: str):
+    if symbol.endswith(':USDT'):
+        return symbol[:-5]
+    else:
+        return symbol
 
 

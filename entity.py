@@ -4,7 +4,7 @@ import asyncio
 
 
 from pathlib import Path
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass, fields, field
 from typing import Dict, List, Callable, Any, Literal
 
@@ -70,43 +70,6 @@ class Quote:
     def __repr__(self):
         return f"Quote(ask={self.ask}, bid={self.bid})"   
     
-    
-class MarketDataStore:
-    quote:Dict[str, Quote] = defaultdict(Quote)
-    open_ratio = {}
-    close_ratio = {}
-    
-    @classmethod
-    async def update(cls, data: Dict):
-        symbol = data['s']
-        cls.quote[symbol] = Quote(
-            ask=float(data['a']),
-            bid=float(data['b'])
-        )
-        
-        logging.debug(f"Updated {symbol} bid: {data['b']} ask: {data['a']}")
-        
-        spot_symbol = symbol.replace(':USDT', '') if ':' in symbol else symbol
-        await cls.calculate_ratio(spot_symbol)
-            
-    
-    @classmethod
-    async def calculate_ratio(cls, spot_symbol: str):
-        linear_symbol = f'{spot_symbol}:USDT'
-        if spot_symbol in cls.quote and linear_symbol in cls.quote:
-            spot_bid = cls.quote[spot_symbol].bid
-            spot_ask = cls.quote[spot_symbol].ask
-            linear_bid = cls.quote[linear_symbol].bid
-            linear_ask = cls.quote[linear_symbol].ask
-            
-            # cls.close_ratio[spot_symbol] = linear_bid / spot_bid - 1
-            # cls.open_ratio[spot_symbol] = linear_ask / spot_ask - 1
-            
-            cls.open_ratio[spot_symbol] = linear_bid / spot_ask - 1
-            cls.close_ratio[spot_symbol] = linear_ask / spot_bid - 1
-            
-            await EventSystem.emit('ratio_changed', spot_symbol, cls.open_ratio[spot_symbol], cls.close_ratio[spot_symbol])
-
 
 class EventSystem:
     _listeners: Dict[str, List[Callable]] = {}
@@ -239,17 +202,68 @@ class Context:
 context = Context()
 
 
+class RollingMedian:
+    def __init__(self, n = 50):
+        self.n = n
+        self.data = set()
+        self.queue = []
 
+    def input(self, value):
+        if len(self.queue) == self.n:
+            old_value = self.queue.pop(0)
+            if old_value not in self.queue:
+                self.data.remove(old_value)
+        
+        self.queue.append(value)
+        self.data.add(value)
+        
+        return self.get_median()
 
-
-
-
-
-
+    def get_median(self):
+        sorted_data = sorted(self.data)
+        length = len(sorted_data)
+        if length % 2 == 0:
+            return (sorted_data[length//2 - 1] + sorted_data[length//2]) / 2
+        else:
+            return sorted_data[length//2]
+        
+class MarketDataStore:
+    quote:Dict[str, Quote] = defaultdict(Quote)
+    open_ratio = {}
+    close_ratio = {}
+    open_rolling_median = defaultdict(RollingMedian)
+    close_rolling_median = defaultdict(RollingMedian)
     
-
+    @classmethod
+    async def update(cls, data: Dict):
+        symbol = data['s']
+        cls.quote[symbol] = Quote(
+            ask=float(data['a']),
+            bid=float(data['b'])
+        )
+        
+        logging.debug(f"Updated {symbol} bid: {data['b']} ask: {data['a']}")
+        
+        spot_symbol = symbol.replace(':USDT', '') if ':' in symbol else symbol
+        await cls.calculate_ratio(spot_symbol)
+            
     
-    
-    
-
-    
+    @classmethod
+    async def calculate_ratio(cls, spot_symbol: str):
+        linear_symbol = f'{spot_symbol}:USDT'
+        if spot_symbol in cls.quote and linear_symbol in cls.quote:
+            spot_bid = cls.quote[spot_symbol].bid
+            spot_ask = cls.quote[spot_symbol].ask
+            linear_bid = cls.quote[linear_symbol].bid
+            linear_ask = cls.quote[linear_symbol].ask
+            
+            # cls.close_ratio[spot_symbol] = linear_bid / spot_bid - 1
+            # cls.open_ratio[spot_symbol] = linear_ask / spot_ask - 1
+            
+            # cls.open_ratio[spot_symbol] = linear_bid / spot_ask - 1
+            # cls.close_ratio[spot_symbol] = linear_ask / spot_bid - 1
+            
+            cls.open_ratio[spot_symbol] = cls.open_rolling_median[spot_symbol].input(linear_ask / spot_ask - 1)
+            cls.close_ratio[spot_symbol] = cls.close_rolling_median[spot_symbol].input(linear_bid / spot_bid - 1)
+            
+            await EventSystem.emit('ratio_changed', spot_symbol, cls.open_ratio[spot_symbol], cls.close_ratio[spot_symbol])
