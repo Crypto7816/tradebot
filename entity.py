@@ -195,13 +195,44 @@ class PositionDict(Dict[str, Position]):
         
 
 class Context:
-    def __init__(self): 
+    def __init__(self):
+        self._data = {}
         self.spot_account = Account('spot_account')
         self.futures_account = Account('futures_account')
         self.position = PositionDict()
-    
+        self._load_data()
+
     def __repr__(self) -> str:
-        return f"Spot Account: {self.spot_account}\nFutures Account: {self.futures_account}\nPositions: {self.position}"
+        attributes = [f"{k}: {v}" for k, v in self._data.items()]
+        base_repr = f"Spot Account: {self.spot_account}\nFutures Account: {self.futures_account}\nPositions: {self.position}"
+        return base_repr + "\n" + "\n".join(attributes)
+
+    def __setattr__(self, name, value):
+        if name in ['spot_account', 'futures_account', 'position', '_data']:
+            super().__setattr__(name, value)
+        else:
+            self._data[name] = value
+            self._save_data()
+
+    def __getattr__(self, name):
+        if name in self._data:
+            return self._data[name]
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
+    def _get_data_path(self):
+        return Path('.context') / 'data.pkl'
+
+    def _save_data(self):
+        path = self._get_data_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open('wb') as f:
+            pickle.dump(self._data, f)
+
+    def _load_data(self):
+        path = self._get_data_path()
+        if path.exists():
+            with path.open('rb') as f:
+                self._data = pickle.load(f)
 
 
 context = Context()

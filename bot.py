@@ -53,10 +53,10 @@ class TradingBot:
 class Bot(TradingBot):
     def __init__(self, config):
         super().__init__(config)
-        self.client_id = 'client_cloudzy_4'
+        self.client_id = 'testid'
         self.order_ids = {}
-        self.openpx = defaultdict(float)
-        self.level_time = defaultdict(int)
+        context.openpx = defaultdict(float)
+        context.level_time = defaultdict(int)
         self.pending_tasks: Dict[str, asyncio.Task] = {}
         EventSystem.on('ratio_changed', self.on_ratio_changed)
 
@@ -74,8 +74,8 @@ class Bot(TradingBot):
             amount = filled - self.order_ids.get(id, 0)
             res = await self.order_spot(order, symbol, amount)
             spot_average = res['average']
-            self.openpx[symbol] = spot_average / linear_average - 1
-            logging.info(f'[PARTIALLY FILLED ORDER] Symbol: {symbol} Amount: {res["filled"]} Basis: {self.openpx[symbol]}')
+            context.openpx[symbol] = spot_average / linear_average - 1
+            logging.info(f'[PARTIALLY FILLED ORDER] Symbol: {symbol} Amount: {res["filled"]} Basis: {context.openpx[symbol]}')
             self.order_ids[id] = filled - amount + res['filled']
         
     async def on_filled_order(self, order: OrderResponse):
@@ -88,8 +88,8 @@ class Bot(TradingBot):
                 amount = filled - self.order_ids.get(id, 0)
                 res = await self.order_spot(order, symbol, amount)
                 spot_average = res['average']
-                self.openpx[symbol] = spot_average / linear_average - 1
-                logging.info(f'[FILLED ORDER] Symbol: {symbol} Amount: {res["filled"]} Basis: {self.openpx[symbol]}')
+                context.openpx[symbol] = spot_average / linear_average - 1
+                logging.info(f'[FILLED ORDER] Symbol: {symbol} Amount: {res["filled"]} Basis: {context.openpx[symbol]}')
                 self.order_ids.pop(id, None)
             else:
                 logging.info(f'[SOCKET DELAY] Symbol: {symbol} already filled')
@@ -105,7 +105,7 @@ class Bot(TradingBot):
         time_ratio = 2
         
         mask_open = open_ratio > spread_ratio and symbol not in context.position
-        mask_diverge = close_ratio < self.openpx[symbol] - spread_ratio * time_ratio ** self.level_time[symbol] and symbol in context.position
+        mask_diverge = close_ratio < context.openpx[symbol] - spread_ratio * time_ratio ** context.level_time[symbol] and symbol in context.position
         
         if symbol in self.pending_tasks:
             if not self.pending_tasks[symbol].done():
@@ -146,7 +146,7 @@ class Bot(TradingBot):
         symbol: str, # spot
         amount: float = None,
         notional: float = None,
-        time_interval: int = 0.1,
+        time_interval: int = 1,
         close_position: bool = False,
         open_ratio: float = None,
         wait: int = 60 * 10,

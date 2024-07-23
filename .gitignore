@@ -2,3 +2,4 @@
 *.pem
 __pycache__
 .context
+.logs
