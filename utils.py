@@ -1,6 +1,10 @@
 import asyncio
 import logging
 import json
+import random
+import string
+import time
+
 
 import aiohttp
 import websockets
@@ -17,23 +21,24 @@ async def get_listen_key(base_url: str, api_key: str):
             data = await response.json()
             return data['listenKey']
 
-async def keep_alive_listen_key(base_url: str, api_key: str, listen_key: str):
+async def keep_alive_listen_key(base_url: str, api_key: str, listen_key: str, typ: Literal['spot', 'linear', 'inverse']):
     headers = {'X-MBX-APIKEY': api_key}
     while True:
         try:
             async with aiohttp.ClientSession() as session:
-                logging.info('Keep alive listen key...')
-                await asyncio.sleep(20 * 60)
-                res = await session.put(f'{base_url}?listenKey={listen_key}', headers=headers)
-                logging.info(f"Keep alive listen key status: {res.status}")
-                if res.status != 200:
-                    listen_key = await get_listen_key(base_url, api_key)
-                else:
-                    data = await res.json()
-                    logging.info(f"Keep alive listen key: {data['listenKey']}")
+                logging.info(f'Keep alive {typ} listen key...')
+                async with session.put(f'{base_url}?listenKey={listen_key}', headers=headers) as res:
+                    logging.info(f"Keep alive listen key status: {res.status}")
+                    if res.status != 200:
+                        listen_key = await get_listen_key(base_url, api_key)
+                    else:
+                        data = await res.json()
+                        logging.info(f"Keep alive {typ} listen key: {data.get('listenKey', listen_key)}")
+                    await asyncio.sleep(60 * 20)
         except Exception as e:
-            logging.error(f"Error keeping alive listen key: {e}")
-                
+            logging.error(f"Error keeping alive {typ} listen key: {e}")
+            
+                  
 async def user_data_stream(typ: Literal['spot', 'linear', 'inverse'], api_key:str, queue: asyncio.Queue):
     if typ == 'spot':
         base_url = 'https://api.binance.com/api/v3/userDataStream'
@@ -49,7 +54,8 @@ async def user_data_stream(typ: Literal['spot', 'linear', 'inverse'], api_key:st
     ws_url = f'{stream_url}{listen_key}'
     
     
-    asyncio.create_task(keep_alive_listen_key(base_url, api_key, listen_key))
+    asyncio.create_task(keep_alive_listen_key(base_url, api_key, listen_key, typ))
+    # asyncio.create_task(keep_binance_listenkey_alive(api_key, listen_key))
     
     async with websockets.connect(ws_url) as ws:
         while True:
@@ -107,5 +113,17 @@ def is_linear(symbol: str):
 
 def is_spot(symbol: str):
     return ':' not in symbol
+
+def generate_client_order_id(prefix='x-'):
+    timestamp = int(time.time() * 1000)
+    random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    combined = f"{random_part}{timestamp}"
+    while len(combined) < 32:
+        combined += random.choice(string.ascii_lowercase + string.digits)
+    combined = combined[:32]
+    return f"{prefix}{combined}"
+    
+    
+   
 
 

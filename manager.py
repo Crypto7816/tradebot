@@ -96,7 +96,7 @@ class AccountManager:
     
     def _on_account_update(self, res: Dict, typ: Literal['spot', 'future']):
         parse_account_update(res, typ, context)
-        logging.info(f"Updated account info: {context}")
+        # logging.info(f"Updated account info: {context}")
     
     def _on_position_update(self, order: OrderResponse):
         if order.side == 'buy':
@@ -105,6 +105,7 @@ class AccountManager:
             amount = -order.last_filled
         
         context.position.update(symbol=order.symbol, order_amount=amount, order_price=order.price)
+        logging.info(f"Position Updated:\n {context.position}")
             
 
 class OrderManager:
@@ -145,11 +146,12 @@ class OrderManager:
             await EventSystem.emit('new_order', order)
         elif order.status == 'partially_filled':
             await EventSystem.emit('partially_filled_order', order)
+            await EventSystem.emit('position_update', order)
         elif order.status == 'filled':
             await EventSystem.emit('filled_order', order)
+            await EventSystem.emit('position_update', order)   
         elif order.status == 'canceled':
             await EventSystem.emit('canceled_order', order)
-        await EventSystem.emit('position_update', order)
 
     async def place_limit_order(
         self,
@@ -197,7 +199,7 @@ class OrderManager:
                 average = res['average'],
                 price = res['price']
             )
-            logging.info((f"Placed limit {side} order for {symbol} at {order_res['price']}: {order_res['id']} amount: {order_res['amount']}"))
+            logging.debug((f"Placed limit {side} order for {symbol} at {order_res['price']}: {order_res['id']} amount: {order_res['amount']}"))
             return order_res
         except Exception as e:
             logging.error(f"Error placing {side} limit order for {symbol} amount: {amount}: {e}")
@@ -246,7 +248,7 @@ class OrderManager:
                 average = res['average'],
                 price= res['price']
             )
-            logging.info((f"Placed market {side} order for {symbol} at average {order_res['average']}: {order_res['id']} amount: {order_res['amount']}"))
+            logging.debug((f"Placed market {side} order for {symbol} at average {order_res['average']}: {order_res['id']} amount: {order_res['amount']}"))
             return order_res
         except Exception as e:
             logging.error(f"Error placing {side} market order for {symbol} amount: {amount}: {e}")
@@ -268,7 +270,7 @@ class OrderManager:
                 average = res['average'],
                 price = res['price']
             )
-            logging.info(f"Cancelled order {order_id} for {symbol}")
+            logging.debug(f"Cancelled order {order_id} for {symbol}")
             return order_res
         except Exception as e:
             logging.error(f"Error cancelling order {order_id} for {symbol}: {e}")

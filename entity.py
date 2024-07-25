@@ -45,6 +45,11 @@ class OrderResponse:
     def __len__(self):
         return len(fields(self))
     
+    def get(self, key: str, default: Any = None) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        return default
+    
 class Quote:
     __slots__ = ['ask', 'bid']
 
@@ -177,7 +182,7 @@ class PositionDict(Dict[str, Position]):
             self[symbol] = Position(symbol=symbol)
         self[symbol].update(order_amount, order_price)
         
-        if self[symbol].amount == 0:
+        if abs(self[symbol].amount) <= 1e-8:
             del self[symbol]
             
         self.save_positions()

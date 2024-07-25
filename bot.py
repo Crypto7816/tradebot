@@ -7,7 +7,7 @@ from typing import List, Dict
 from collections import defaultdict
 
 
-from utils import spot_2_linear, linear_2_spot, is_linear
+from utils import spot_2_linear, linear_2_spot, is_linear, generate_client_order_id
 from entity import EventSystem, MarketDataStore, OrderResponse, context
 from manager import NatsManager, OrderManager, ExchangeManager, AccountManager
 
@@ -53,7 +53,7 @@ class TradingBot:
 class Bot(TradingBot):
     def __init__(self, config):
         super().__init__(config)
-        self.client_id = 'testid'
+        self.client_id = generate_client_order_id()
         self.order_ids = {}
         context.openpx = defaultdict(float)
         context.level_time = defaultdict(int)
@@ -62,11 +62,13 @@ class Bot(TradingBot):
 
     async def on_new_order(self, order: OrderResponse):
         if order.client_order_id == self.client_id and is_linear(order.symbol):
+        # if is_linear(order.symbol):
             id = order.id
             self.order_ids[id] = order.filled
 
     async def on_partially_filled_order(self, order: OrderResponse):
         if order.client_order_id == self.client_id and is_linear(order.symbol):
+        # if is_linear(order.symbol):
             id = order.id
             filled = order.filled
             symbol = linear_2_spot(order.symbol)
@@ -80,6 +82,7 @@ class Bot(TradingBot):
         
     async def on_filled_order(self, order: OrderResponse):
         if order.client_order_id == self.client_id and is_linear(order.symbol):
+        # if is_linear(order.symbol):
             id = order.id
             symbol = linear_2_spot(order.symbol)
             filled = order.filled
@@ -96,6 +99,7 @@ class Bot(TradingBot):
                 
     async def on_canceled_order(self, order: OrderResponse):
         if order.client_order_id == self.client_id and is_linear(order.symbol):
+        # if is_linear(order.symbol):
             id = order.id 
             self.order_ids.pop(id, None)
         
@@ -107,16 +111,9 @@ class Bot(TradingBot):
         mask_open = open_ratio > spread_ratio and symbol not in context.position
         mask_diverge = close_ratio < context.openpx[symbol] - spread_ratio * time_ratio ** context.level_time[symbol] and symbol in context.position
         
-        if symbol in self.pending_tasks:
-            if not self.pending_tasks[symbol].done():
-                # 如果任务还在执行，我们不创建新任务
-                return
-            # 如果任务已完成，我们从字典中移除它
-            self.pending_tasks.pop(symbol)
-
-        task = asyncio.create_task(self._process_symbol(symbol, mask_diverge, mask_open, open_ratio, close_ratio))
-        self.pending_tasks[symbol] = task
-        task.add_done_callback(lambda _: self._task_done(symbol))
+        if symbol not in self.pending_tasks:
+            task = asyncio.create_task(self._process_symbol(symbol, mask_diverge, mask_open, open_ratio, close_ratio), name=symbol)
+            self.pending_tasks[symbol] = task
 
     async def _process_symbol(self, symbol: str, mask_diverge: bool, mask_open: bool, open_ratio: float, close_ratio: float):
         try:
@@ -135,11 +132,39 @@ class Bot(TradingBot):
                     notional=20,
                     open_ratio=open_ratio,
                 )
+            self.pending_tasks.pop(symbol, None)
         except Exception as e:
             logging.error(f"Error processing {symbol}: {e}")
-
-    def _task_done(self, symbol: str):
-        self.pending_tasks.pop(symbol, None)
+    
+    
+    async def order_linear_test(
+        self,
+        symbol: str, 
+        amount: float = None,
+        notional: float = None,
+        close_position: bool = False,
+        open_ratio: float = None,
+        wait: int = 120,
+    ):
+        await asyncio.sleep(wait)
+        linear_symbol = spot_2_linear(symbol)
+        if close_position:
+            spot_bid = MarketDataStore.quote[symbol].bid
+            linear_bid = MarketDataStore.quote[linear_symbol].bid            
+            context.position.update(symbol, -amount, spot_bid)
+            context.position.update(linear_bid ,amount, linear_bid)
+        else:
+            spot_ask = MarketDataStore.quote[symbol].ask
+            linear_ask = MarketDataStore.quote[linear_symbol].ask
+            amount = notional / linear_ask
+            
+            context.position.update(symbol, amount, spot_ask)
+            context.position.update(linear_symbol, -amount, linear_ask)
+            
+        context.openpx[symbol] = open_ratio    
+        logging.info(f'[FILLED ORDER]: {symbol} ratio: {open_ratio}')
+            
+    
     
     async def order_linear(
         self,
@@ -151,6 +176,7 @@ class Bot(TradingBot):
         open_ratio: float = None,
         wait: int = 60 * 10,
     ):
+
         order_placed = False
         start_time = time.time()
         
@@ -164,12 +190,12 @@ class Bot(TradingBot):
             raise Exception("Either 'notional' or 'amount' must be provided.")
         elif not amount:
             amount = notional / linear_ask if not close_position else notional / linear_bid
-        amount = float(self._exchange.api.amount_to_precision(symbol, amount))
+        amount = float(self._exchange.api.amount_to_precision(linear_symbol, amount))
         
         remain_amount = 0
         while True:
             if time.time() - start_time > wait:
-                logging.info(f"Operation for {symbol} timed out after {wait} seconds. Cancelling order if exists.")
+                logging.debug(f"Operation for {symbol} timed out after {wait} seconds. Cancelling order if exists.")
                 if order_placed and res:
                     try:
                         await self._order.cancel_order(res['id'], linear_symbol)
@@ -184,7 +210,7 @@ class Bot(TradingBot):
             curr_linear_ask = MarketDataStore.quote[linear_symbol].ask
             
             ratio = curr_linear_ask / curr_spot_ask - 1 if not close_position else curr_linear_bid / curr_spot_bid - 1
-            logging.info(f"symbol: {symbol}, ratio: {ratio}, open_ratio: {open_ratio}, spot_bid: {curr_spot_bid}, spot_ask: {curr_spot_ask}, linear_bid: {curr_linear_bid}, linear_ask: {curr_linear_ask}")
+            logging.debug(f"symbol: {symbol}, ratio: {ratio}, open_ratio: {open_ratio}, spot_bid: {curr_spot_bid}, spot_ask: {curr_spot_ask}, linear_bid: {curr_linear_bid}, linear_ask: {curr_linear_ask}")
             if not order_placed:
                 amount = remain_amount if remain_amount > 0 else amount
                 if close_position:
@@ -208,48 +234,51 @@ class Bot(TradingBot):
                         price=price,
                         client_order_id=self.client_id,   
                     )
-                order_placed = True
+                if res:
+                    order_placed = True
+                else:
+                    return False
             
-            if order_placed and res:
-                order_res = await self._exchange.api.fetch_order(id=res['id'], symbol=linear_symbol)
-                if order_res['status'] == 'closed':
-                    logging.info(f"Order {res['id']} for {linear_symbol} has been filled.")
-                    if res['id'] in self.order_ids:
-                        logging.info(f"[SOCKET DELAY] Symbol: {symbol}")
-                        await self.on_filled_order(order_res)
-                    return True
+            # if order_placed and res:
+            #     order_res = await self._exchange.api.fetch_order(id=res['id'], symbol=linear_symbol)
+            #     if order_res['status'] == 'closed':
+            #         logging.info(f"Order {res['id']} for {linear_symbol} has been filled.")
+            #         if res['id'] in self.order_ids:
+            #             logging.info(f"[SOCKET DELAY] Symbol: {symbol}")
+            #             await self.on_filled_order(order_res)
+            #         return True
             
             if close_position:
                 if order_placed and curr_spot_bid != spot_bid: # if curr_spot_bid changes, cancel the order
                     curr_price = (open_ratio + 1) * curr_spot_bid
                     curr_price = float(self._exchange.api.price_to_precision(linear_symbol, curr_price))
                     if curr_price != price:
-                        try:
-                            res = await self._order.cancel_order(res['id'], linear_symbol)
-                            remain_amount = res['remaining']
+                        res = await self._order.cancel_order(res['id'], linear_symbol)
+                        if res:
+                            remain_amount = res.get('remaining', 0)
                             spot_bid = curr_spot_bid
                             order_placed = False
-                        except Exception as e:
-                            logging.error(f"Error cancelling order for {linear_symbol}: {e}")
+                        else:
+                            return False
                     else:
-                        logging.info(f"Price: {curr_price} has not changed for {linear_symbol}.")
+                        logging.debug(f"Price: {curr_price} has not changed for {linear_symbol}.")
             else:
                 if order_placed and curr_spot_ask != spot_ask:
                     curr_price = (open_ratio + 1) * curr_spot_ask
                     curr_price = float(self._exchange.api.price_to_precision(linear_symbol, curr_price))
                     if curr_price != price:
-                        try:
-                            res = await self._order.cancel_order(res['id'], linear_symbol)
-                            remain_amount = res['remaining']
+                        res = await self._order.cancel_order(res['id'], linear_symbol)
+                        if res:
+                            remain_amount = res.get('remaining', 0)
                             spot_ask = curr_spot_ask
                             order_placed = False
-                        except Exception as e:
-                            logging.error(f"Error cancelling order for {linear_symbol}: {e}")
+                        else:
+                            return False
                     else:
-                        logging.info(f"Price: {curr_price} has not changed for {linear_symbol}.")
+                        logging.debug(f"Price: {curr_price} has not changed for {linear_symbol}.")
             
-            if not res:
-                return True
+            # if not res:
+            #     return True
             
             await asyncio.sleep(time_interval)
     
