@@ -12,7 +12,7 @@ from entity import EventSystem, MarketDataStore, OrderResponse
 from manager import NatsManager, OrderManager, ExchangeManager, AccountManager
 
 class TradingBot:
-    logger = log_register.get_logger('Bot', level='INFO')
+    logger = log_register.get_logger('bot', level='INFO')
     
     def __init__(self, config):
         self._config = config
@@ -78,8 +78,8 @@ class Bot(TradingBot):
             amount = filled - self.order_ids[id]
             res = await self.order_spot(order, symbol, amount)
             spot_average = res['average']
-            context.openpx[symbol] = spot_average / linear_average - 1
-            self.logger.info(f'[PARTIALLY FILLED ORDER] Symbol: {symbol} Amount: {res["filled"]} Basis: {context.openpx[symbol]}')
+            context.openpx[symbol] = linear_average/spot_average - 1
+            self.logger.info(f'[PARTIALLY FILLED ORDER] id: {id} Symbol: {symbol} Amount: {res["filled"]} Basis: {context.openpx[symbol]}')
             self.order_ids[id] = filled - amount + res['filled']
         
     async def on_filled_order(self, order: OrderResponse):
@@ -93,8 +93,8 @@ class Bot(TradingBot):
                 amount = filled - self.order_ids[id]
                 res = await self.order_spot(order, symbol, amount)
                 spot_average = res['average']
-                context.openpx[symbol] = spot_average / linear_average - 1
-                self.logger.info(f'[FILLED ORDER] Symbol: {symbol} Amount: {res["filled"]} Basis: {context.openpx[symbol]}')
+                context.openpx[symbol] =  linear_average/spot_average - 1
+                self.logger.info(f'[FILLED ORDER] id: {id} Symbol: {symbol} Amount: {res["filled"]} Basis: {context.openpx[symbol]}')
                 self.order_ids.pop(id, None)
             else:
                 self.logger.info(f'[SOCKET DELAY] Symbol: {symbol} already filled')
@@ -192,7 +192,7 @@ class Bot(TradingBot):
             raise Exception("Either 'notional' or 'amount' must be provided.")
         elif not amount:
             amount = notional / linear_ask if not close_position else notional / linear_bid
-        amount = float(self._exchange.api.amount_to_precision(linear_symbol, amount))
+        amount = float(self._exchange.amount_to_precision(linear_symbol, amount))
         
         remain_amount = 0
         while True:
@@ -217,7 +217,7 @@ class Bot(TradingBot):
                 amount = remain_amount if remain_amount > 0 else amount
                 if close_position:
                     price = (open_ratio + 1) * curr_spot_bid
-                    price = float(self._exchange.api.price_to_precision(linear_symbol, price))
+                    price = float(self._exchange.price_to_precision(linear_symbol, price, mode='floor'))
                     res = await self._order.place_limit_order(
                         symbol=linear_symbol,
                         side='buy',
@@ -228,7 +228,7 @@ class Bot(TradingBot):
                     )
                 else:
                     price = (open_ratio + 1) * curr_spot_ask
-                    price = float(self._exchange.api.price_to_precision(linear_symbol, price))
+                    price = float(self._exchange.price_to_precision(linear_symbol, price, mode='ceil'))
                     res = await self._order.place_limit_order(
                         symbol=linear_symbol,
                         side='sell',
@@ -253,7 +253,7 @@ class Bot(TradingBot):
             if close_position:
                 if order_placed and curr_spot_bid != spot_bid: # if curr_spot_bid changes, cancel the order
                     curr_price = (open_ratio + 1) * curr_spot_bid
-                    curr_price = float(self._exchange.api.price_to_precision(linear_symbol, curr_price))
+                    curr_price = float(self._exchange.price_to_precision(linear_symbol, curr_price, mode='floor'))
                     if curr_price != price:
                         res = await self._order.cancel_order(res['id'], linear_symbol)
                         if res:
@@ -267,7 +267,7 @@ class Bot(TradingBot):
             else:
                 if order_placed and curr_spot_ask != spot_ask:
                     curr_price = (open_ratio + 1) * curr_spot_ask
-                    curr_price = float(self._exchange.api.price_to_precision(linear_symbol, curr_price))
+                    curr_price = float(self._exchange.price_to_precision(linear_symbol, curr_price, mode='ceil'))
                     if curr_price != price:
                         res = await self._order.cancel_order(res['id'], linear_symbol)
                         if res:

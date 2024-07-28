@@ -10,6 +10,9 @@ import websockets
 
 
 from typing import Literal, Dict
+from decimal import Decimal, ROUND_HALF_UP, ROUND_CEILING, ROUND_FLOOR
+
+
 from entity import Context
 from entity import log_register
 
@@ -125,6 +128,30 @@ def generate_client_order_id(prefix='x-'):
         combined += random.choice(string.ascii_lowercase + string.digits)
     combined = combined[:32]
     return f"{prefix}{combined}"
+
+def price_to_precision(symbol: str, price: float, mode: Literal['round', 'ceil', 'floor'], market: Dict):
+    market = market[symbol]
+    price = Decimal(str(price))
+    precision = Decimal(str(market[symbol]['precision']['price']))
+    
+    if mode == 'round':
+        return price.quantize(precision, rounding=ROUND_HALF_UP)
+    elif mode == 'ceil':
+        return price.quantize(precision, rounding=ROUND_CEILING)
+    elif mode == 'floor':
+        return price.quantize(precision, rounding=ROUND_FLOOR)
+
+def amount_to_precision(symbol: str, amount: float, mode: Literal['round', 'ceil', 'floor'], market: Dict):
+    market = market[symbol]
+    amount = Decimal(str(amount))
+    precision = Decimal(str(market[symbol]['precision']['amount']))
+    
+    if mode == 'round':
+        return amount.quantize(precision, rounding=ROUND_HALF_UP)
+    elif mode == 'ceil':
+        return amount.quantize(precision, rounding=ROUND_CEILING)
+    elif mode == 'floor':
+        return amount.quantize(precision, rounding=ROUND_FLOOR)
     
     
    

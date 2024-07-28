@@ -1,12 +1,10 @@
 import asyncio
-
 import uvloop
 
 
 from bot import Bot
 
 
-from manager import AccountManager, ExchangeManager
 from configparser import ConfigParser
 
 
@@ -26,7 +24,6 @@ async def main():
     }
     bot = Bot(config)
     await bot.run()
-
 
 
 if __name__ == '__main__':

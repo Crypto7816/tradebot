@@ -9,6 +9,7 @@ from nats.aio.client import Client as NATS
 import ccxt.pro as ccxtpro
 
 
+from utils import amount_to_precision, price_to_precision
 from utils import user_data_stream, parse_symbol, parse_order_status, parse_account_update
 from entity import context, log_register
 from entity import OrderResponse, MarketDataStore, EventSystem
@@ -51,6 +52,7 @@ class ExchangeManager:
         self.config = config
         self.api = self._init_exchange()
         self._queue = asyncio.Queue()
+        self.market = None
     
     def _init_exchange(self) -> Union[ccxtpro.Exchange, ccxtpro.binance]:
         try:
@@ -64,8 +66,10 @@ class ExchangeManager:
         
         return api
     
-    async def load_markets(self) -> None:
-        await self.api.load_markets()
+    async def load_markets(self) -> Dict:
+        market = await self.api.load_markets()
+        self.market = market
+        return market
     
     async def close(self) -> None:
         await self.api.close()
@@ -87,10 +91,20 @@ class ExchangeManager:
             elif res['e'] == 'outboundAccountPosition':
                 asyncio.create_task(EventSystem.emit('account_update', res, 'spot'))
             self._queue.task_done()
+    
+    def amount_to_precision(self, symbol: str, amount: float, mode: Literal['round', 'ceil', 'floor'] = 'round') -> float:
+        if self.market is None:
+            raise ValueError("Market data is not loaded")
+        return amount_to_precision(symbol, amount, mode, self.market)
+    
+    def price_to_precision(self, symbol: str, price: float, mode: Literal['round', 'ceil', 'floor'] = 'round') -> float:
+        if self.market is None:
+            raise ValueError("Market data is not loaded")
+        return price_to_precision(symbol, price, mode, self.market)
 
 
 class AccountManager:
-    logger = log_register.get_logger('AccountManager', level='INFO')
+    logger = log_register.get_logger('account', level='INFO')
     
     def __init__(self):
         EventSystem.on('account_update', self._on_account_update)
@@ -111,7 +125,7 @@ class AccountManager:
             
 
 class OrderManager:
-    logger = log_register.get_logger('OrderManager', level='INFO')
+    logger = log_register.get_logger('order', level='INFO')
     
     def __init__(self, exchange: ExchangeManager):
         self._exchange = exchange
@@ -203,7 +217,7 @@ class OrderManager:
                 average = res['average'],
                 price = res['price']
             )
-            self.logger.info((f"Placed limit {side} order for {symbol} at {order_res['price']}: {order_res['id']} amount: {order_res['amount']}"))
+            self.logger.info((f"Placed limit {side} order {order_res['id']} for {symbol} at {order_res['price']}: amount: {order_res['amount']}"))
             return order_res
         except Exception as e:
             self.logger.error(f"Error placing {side} limit order for {symbol} amount: {amount}: {e}")
@@ -252,7 +266,7 @@ class OrderManager:
                 average = res['average'],
                 price= res['price']
             )
-            self.logger.info((f"Placed market {side} order for {symbol} at average {order_res['average']}: {order_res['id']} amount: {order_res['amount']}"))
+            self.logger.info((f"Placed market {side} order {order_res['id']} for {symbol} at average {order_res['average']}: amount: {order_res['amount']}"))
             return order_res
         except Exception as e:
             self.logger.error(f"Error placing {side} market order for {symbol} amount: {amount}: {e}")
@@ -280,3 +294,15 @@ class OrderManager:
             self.logger.error(f"Error cancelling order {order_id} for {symbol}: {e}")
             return None
 
+async def main():
+    config = {
+        'exchange_id': 'binance',
+        'sandbox': False,
+    }
+    exchange = ExchangeManager(config)
+    await exchange.load_markets()
+
+if __name__ == '__main__':
+    import asyncio
+    asyncio.run(main())
+    
