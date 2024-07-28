@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import json
 import random
 import string
@@ -12,6 +11,10 @@ import websockets
 
 from typing import Literal, Dict
 from entity import Context
+from entity import log_register
+
+
+logger = log_register.get_logger('utils', level='INFO')
 
 
 async def get_listen_key(base_url: str, api_key: str):
@@ -26,17 +29,17 @@ async def keep_alive_listen_key(base_url: str, api_key: str, listen_key: str, ty
     while True:
         try:
             async with aiohttp.ClientSession() as session:
-                logging.info(f'Keep alive {typ} listen key...')
+                logger.info(f'Keep alive {typ} listen key...')
                 async with session.put(f'{base_url}?listenKey={listen_key}', headers=headers) as res:
-                    logging.info(f"Keep alive listen key status: {res.status}")
+                    logger.info(f"Keep alive listen key status: {res.status}")
                     if res.status != 200:
                         listen_key = await get_listen_key(base_url, api_key)
                     else:
                         data = await res.json()
-                        logging.info(f"Keep alive {typ} listen key: {data.get('listenKey', listen_key)}")
+                        logger.info(f"Keep alive {typ} listen key: {data.get('listenKey', listen_key)}")
                     await asyncio.sleep(60 * 20)
         except Exception as e:
-            logging.error(f"Error keeping alive {typ} listen key: {e}")
+            logger.error(f"Error keeping alive {typ} listen key: {e}")
             
                   
 async def user_data_stream(typ: Literal['spot', 'linear', 'inverse'], api_key:str, queue: asyncio.Queue):

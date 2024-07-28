@@ -1,8 +1,9 @@
-import logging
+# import logging
 import pickle
 import asyncio
 
 
+from loguru import logger
 from pathlib import Path
 from collections import defaultdict, deque
 from dataclasses import dataclass, fields, field
@@ -240,9 +241,6 @@ class Context:
                 self._data = pickle.load(f)
 
 
-context = Context()
-
-
 class RollingMedian:
     def __init__(self, n = 50):
         self.n = n
@@ -268,6 +266,7 @@ class RollingMedian:
         else:
             return sorted_data[length//2]
         
+        
 class MarketDataStore:
     quote:Dict[str, Quote] = defaultdict(Quote)
     open_ratio = {}
@@ -282,8 +281,6 @@ class MarketDataStore:
             ask=float(data['a']),
             bid=float(data['b'])
         )
-        
-        logging.debug(f"Updated {symbol} bid: {data['b']} ask: {data['a']}")
         
         spot_symbol = symbol.replace(':USDT', '') if ':' in symbol else symbol
         await cls.calculate_ratio(spot_symbol)
@@ -308,3 +305,25 @@ class MarketDataStore:
             cls.close_ratio[spot_symbol] = cls.close_rolling_median[spot_symbol].input(linear_bid / spot_bid - 1)
             
             await EventSystem.emit('ratio_changed', spot_symbol, cls.open_ratio[spot_symbol], cls.close_ratio[spot_symbol])
+
+
+class LogRegister:
+    def __init__(self, log_dir=".logs"):
+        self.log_dir = Path(log_dir)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.loggers = {}
+
+    def get_logger(self, class_name, level=Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']):
+        if class_name not in self.loggers:
+            log_file = self.log_dir / f"{class_name}.log"
+            logger_instance = logger.bind(class_name=class_name)
+            logger.add(str(log_file), 
+                       filter=lambda record: record["extra"].get("class_name") == class_name,
+                       rotation="1 day",
+                       level=level)
+            self.loggers[class_name] = logger_instance
+        return self.loggers[class_name]
+
+
+context = Context()
+log_register = LogRegister()

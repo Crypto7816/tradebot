@@ -1,6 +1,5 @@
 import ssl
 import asyncio
-import logging
 from typing import Literal, Union, Dict
 
 
@@ -11,7 +10,8 @@ import ccxt.pro as ccxtpro
 
 
 from utils import user_data_stream, parse_symbol, parse_order_status, parse_account_update
-from entity import OrderResponse, MarketDataStore, EventSystem, context
+from entity import context, log_register
+from entity import OrderResponse, MarketDataStore, EventSystem
 
 
 class NatsManager:
@@ -90,13 +90,15 @@ class ExchangeManager:
 
 
 class AccountManager:
+    logger = log_register.get_logger('AccountManager', level='INFO')
+    
     def __init__(self):
         EventSystem.on('account_update', self._on_account_update)
         EventSystem.on('position_update', self._on_position_update)
     
     def _on_account_update(self, res: Dict, typ: Literal['spot', 'future']):
         parse_account_update(res, typ, context)
-        # logging.info(f"Updated account info: {context}")
+        self.logger.info(f"Account Updated:\n {context.spot_account}\n {context.futures_account}")
     
     def _on_position_update(self, order: OrderResponse):
         if order.side == 'buy':
@@ -105,10 +107,12 @@ class AccountManager:
             amount = -order.last_filled
         
         context.position.update(symbol=order.symbol, order_amount=amount, order_price=order.price)
-        logging.info(f"Position Updated:\n {context.position}")
+        self.logger.info(f"Position Updated:\n {context.position}")
             
 
 class OrderManager:
+    logger = log_register.get_logger('OrderManager', level='INFO')
+    
     def __init__(self, exchange: ExchangeManager):
         self._exchange = exchange
         EventSystem.on('order_update', self._on_order_update)
@@ -199,10 +203,10 @@ class OrderManager:
                 average = res['average'],
                 price = res['price']
             )
-            logging.debug((f"Placed limit {side} order for {symbol} at {order_res['price']}: {order_res['id']} amount: {order_res['amount']}"))
+            self.logger.info((f"Placed limit {side} order for {symbol} at {order_res['price']}: {order_res['id']} amount: {order_res['amount']}"))
             return order_res
         except Exception as e:
-            logging.error(f"Error placing {side} limit order for {symbol} amount: {amount}: {e}")
+            self.logger.error(f"Error placing {side} limit order for {symbol} amount: {amount}: {e}")
             return None
     
     async def place_market_order(
@@ -248,10 +252,10 @@ class OrderManager:
                 average = res['average'],
                 price= res['price']
             )
-            logging.debug((f"Placed market {side} order for {symbol} at average {order_res['average']}: {order_res['id']} amount: {order_res['amount']}"))
+            self.logger.info((f"Placed market {side} order for {symbol} at average {order_res['average']}: {order_res['id']} amount: {order_res['amount']}"))
             return order_res
         except Exception as e:
-            logging.error(f"Error placing {side} market order for {symbol} amount: {amount}: {e}")
+            self.logger.error(f"Error placing {side} market order for {symbol} amount: {amount}: {e}")
             return None
             
     async def cancel_order(self, order_id: str, symbol: str) -> Union[OrderResponse, None]:
@@ -270,9 +274,9 @@ class OrderManager:
                 average = res['average'],
                 price = res['price']
             )
-            logging.debug(f"Cancelled order {order_id} for {symbol}")
+            self.logger.info(f"Cancelled order {order_id} for {symbol}")
             return order_res
         except Exception as e:
-            logging.error(f"Error cancelling order {order_id} for {symbol}: {e}")
+            self.logger.error(f"Error cancelling order {order_id} for {symbol}: {e}")
             return None
 

@@ -1,5 +1,6 @@
 *.cfg
 *.pem
-__pycache__
-.context
-.logs
+__pycache__/
+.context/
+.logs/
+keys/
