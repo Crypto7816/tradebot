@@ -132,7 +132,7 @@ def generate_client_order_id(prefix='x-'):
 def price_to_precision(symbol: str, price: float, mode: Literal['round', 'ceil', 'floor'], market: Dict):
     market = market[symbol]
     price = Decimal(str(price))
-    precision = Decimal(str(market[symbol]['precision']['price']))
+    precision = Decimal(str(market['precision']['price']))
     
     if mode == 'round':
         return price.quantize(precision, rounding=ROUND_HALF_UP)
@@ -144,7 +144,7 @@ def price_to_precision(symbol: str, price: float, mode: Literal['round', 'ceil',
 def amount_to_precision(symbol: str, amount: float, mode: Literal['round', 'ceil', 'floor'], market: Dict):
     market = market[symbol]
     amount = Decimal(str(amount))
-    precision = Decimal(str(market[symbol]['precision']['amount']))
+    precision = Decimal(str(market['precision']['amount']))
     
     if mode == 'round':
         return amount.quantize(precision, rounding=ROUND_HALF_UP)

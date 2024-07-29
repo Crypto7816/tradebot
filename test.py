@@ -4,7 +4,7 @@ import numpy as np
 
 
 class RollingMedian:
-    def __init__(self, n = 200):
+    def __init__(self, n = 5000):
         self.n = n
         self.data = collections.deque(maxlen=n)
     
@@ -65,8 +65,8 @@ def test_rolling_median():
 
     # 性能测试
     print("\n性能测试:")
-    rm = RollingMedian(200)
-    sizes = [1000, 10000, 100000]
+    rm = RollingMedian(5000)
+    sizes = [10000, 50000, 100000]
     for size in sizes:
         
         start_time = time.time()

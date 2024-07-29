@@ -293,16 +293,3 @@ class OrderManager:
         except Exception as e:
             self.logger.error(f"Error cancelling order {order_id} for {symbol}: {e}")
             return None
-
-async def main():
-    config = {
-        'exchange_id': 'binance',
-        'sandbox': False,
-    }
-    exchange = ExchangeManager(config)
-    await exchange.load_markets()
-
-if __name__ == '__main__':
-    import asyncio
-    asyncio.run(main())
-    

@@ -242,7 +242,7 @@ class Context:
 
 
 class RollingMedian:
-    def __init__(self, n = 50):
+    def __init__(self, n = 2000):
         self.n = n
         self.data = set()
         self.queue = []
@@ -253,10 +253,14 @@ class RollingMedian:
             if old_value not in self.queue:
                 self.data.remove(old_value)
         
-        self.queue.append(value)
-        self.data.add(value)
-        
-        return self.get_median()
+            self.queue.append(value)
+            self.data.add(value)
+            
+            return self.get_median()
+        else:
+            self.queue.append(value)
+            self.data.add(value)
+            return 0
 
     def get_median(self):
         sorted_data = sorted(self.data)
