@@ -67,6 +67,7 @@ class Bot(TradingBot):
         # if is_linear(order.symbol):
             id = order.id
             self.order_ids[id] = order.filled
+            self._order.logger.info(f'[NEW ORDER] id: {id} Symbol: {order.symbol} Amount: {order.amount} Side: {order.side}')
 
     async def on_partially_filled_order(self, order: OrderResponse):
         if order.client_order_id == self.client_id and is_linear(order.symbol):
@@ -79,8 +80,9 @@ class Bot(TradingBot):
             res = await self.order_spot(order, symbol, amount)
             spot_average = res['average']
             context.openpx[symbol] = linear_average/spot_average - 1
-            self.logger.info(f'[PARTIALLY FILLED ORDER] id: {id} Symbol: {symbol} Amount: {res["filled"]} Basis: {context.openpx[symbol]}')
             self.order_ids[id] = filled - amount + res['filled']
+            self.logger.info(f'[PARTIALLY FILLED ORDER] id: {id} Symbol: {symbol} Amount: {res["filled"]} Basis: {context.openpx[symbol]} Already Filled: {self.order_ids[id]}')
+            
         
     async def on_filled_order(self, order: OrderResponse):
         if order.client_order_id == self.client_id and is_linear(order.symbol):
@@ -94,7 +96,7 @@ class Bot(TradingBot):
                 res = await self.order_spot(order, symbol, amount)
                 spot_average = res['average']
                 context.openpx[symbol] =  linear_average/spot_average - 1
-                self.logger.info(f'[FILLED ORDER] id: {id} Symbol: {symbol} Amount: {res["filled"]} Basis: {context.openpx[symbol]}')
+                self.logger.info(f'[FILLED ORDER] id: {id} Symbol: {symbol} Amount: {amount} Filled: {res['filled']} Basis: {context.openpx[symbol]}')
                 self.order_ids.pop(id, None)
             else:
                 self.logger.info(f'[SOCKET DELAY] Symbol: {symbol} already filled')
@@ -104,6 +106,7 @@ class Bot(TradingBot):
         # if is_linear(order.symbol):
             id = order.id 
             self.order_ids.pop(id, None)
+            self._order.logger.info(f'[CANCELED ORDER] id: {id} Symbol: {order.symbol} Amount: {order.amount} Side: {order.side}')
         
     
     async def on_ratio_changed(self, symbol: str, open_ratio: float, close_ratio: float):
@@ -173,7 +176,7 @@ class Bot(TradingBot):
         symbol: str, # spot
         amount: float = None,
         notional: float = None,
-        time_interval: int = 1,
+        time_interval: int = 0.01,
         close_position: bool = False,
         open_ratio: float = None,
         wait: int = 60 * 10,
@@ -260,6 +263,7 @@ class Bot(TradingBot):
                             remain_amount = res.get('remaining', 0)
                             spot_bid = curr_spot_bid
                             order_placed = False
+                            price = curr_price
                         else:
                             return False
                     else:
@@ -274,6 +278,7 @@ class Bot(TradingBot):
                             remain_amount = res.get('remaining', 0)
                             spot_ask = curr_spot_ask
                             order_placed = False
+                            price = curr_price
                         else:
                             return False
                     else:

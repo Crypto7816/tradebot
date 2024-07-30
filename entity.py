@@ -242,7 +242,7 @@ class Context:
 
 
 class RollingMedian:
-    def __init__(self, n = 2000):
+    def __init__(self, n = 50):
         self.n = n
         self.data = set()
         self.queue = []
@@ -311,65 +311,32 @@ class MarketDataStore:
             await EventSystem.emit('ratio_changed', spot_symbol, cls.open_ratio[spot_symbol], cls.close_ratio[spot_symbol])
 
 
-# class LogRegister:
-#     def __init__(self, log_dir=".logs"):
-#         self.log_dir = Path(log_dir)
-#         self.log_dir.mkdir(parents=True, exist_ok=True)
-#         self.loggers = {}
-
-#     def get_logger(self, class_name, level=Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']):
-#         if class_name not in self.loggers:
-#             log_file = self.log_dir / f"{class_name}.log"
-#             logger_instance = logger.bind(class_name=class_name)
-#             logger.add(str(log_file), 
-#                        filter=lambda record: record["extra"].get("class_name") == class_name,
-#                        rotation="1 day",
-#                        level=level)
-#             self.loggers[class_name] = logger_instance
-#         return self.loggers[class_name]
-
 class LogRegister:
     def __init__(self, log_dir=".logs"):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.loggers = {}
         
-        # 移除默认的处理器
         logger.remove()
-        
-        # 设置全局日志
         self.setup_global_logging()
-        
-        # 设置全局异常处理
         self.setup_exception_handling()
 
-    def setup_global_logging(self, level='INFO'):
-        # 添加控制台处理器
+    def setup_global_logging(self, level: Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] = 'INFO'):
+
         logger.add(sys.stderr, level=level)
-        
-        # 添加全局日志文件处理器
         logger.add(str(self.log_dir / "log.log"), level=level, rotation="1 day")
-        
-        # 添加错误日志文件处理器
         logger.add(str(self.log_dir / "error.log"), level="ERROR", rotation="1 day")
 
     def setup_exception_handling(self):
         def handle_exception(exc_type, exc_value, exc_traceback):
-            # 忽略 KeyboardInterrupt 异常
             if issubclass(exc_type, KeyboardInterrupt):
                 sys.__excepthook__(exc_type, exc_value, exc_traceback)
                 return
-            
-            # 记录未捕获的异常
             logger.opt(exception=(exc_type, exc_value, exc_traceback)).error("Uncaught exception:")
-
-        # 设置全局异常处理器
         sys.excepthook = handle_exception
-
-        # 确保异步代码中的异常也被捕获
         logger.add(lambda _: None, level="ERROR", backtrace=True, diagnose=True)
 
-    def get_logger(self, class_name, level=Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']):
+    def get_logger(self, class_name, level: Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] = 'INFO'):
         if class_name not in self.loggers:
             log_file = self.log_dir / f"{class_name}.log"
             logger_instance = logger.bind(class_name=class_name)

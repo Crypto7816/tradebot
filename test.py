@@ -21,6 +21,7 @@ class RollingMedian:
             return sorted_data[mid]
         # return np.median(np.unique(self.data))
     
+    
 class RollingMedian2:
     def __init__(self, n):
         self.n = n
