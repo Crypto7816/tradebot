@@ -1,9 +1,13 @@
 import sys
 import pickle
 import asyncio
+import collections  
+import time
 
 
-from loguru import logger
+import spdlog as spd
+
+
 from pathlib import Path
 from collections import defaultdict, deque
 from dataclasses import dataclass, fields, field
@@ -242,33 +246,26 @@ class Context:
 
 
 class RollingMedian:
-    def __init__(self, n = 50):
+    def __init__(self, n=10):
         self.n = n
-        self.data = set()
-        self.queue = []
+        self.data = collections.deque(maxlen=n)
 
     def input(self, value):
-        if len(self.queue) == self.n:
-            old_value = self.queue.pop(0)
-            if old_value not in self.queue:
-                self.data.remove(old_value)
-        
-            self.queue.append(value)
-            self.data.add(value)
-            
-            return self.get_median()
-        else:
-            self.queue.append(value)
-            self.data.add(value)
-            return 0
+        if value not in self.data:
+            self.data.append(value)
+
+            if len(self.data) == self.n:
+                return self.get_median()
+        return 0
 
     def get_median(self):
         sorted_data = sorted(self.data)
-        length = len(sorted_data)
-        if length % 2 == 0:
-            return (sorted_data[length//2 - 1] + sorted_data[length//2]) / 2
+        mid = len(sorted_data) // 2
+
+        if len(sorted_data) % 2 == 0:
+            return (sorted_data[mid - 1] + sorted_data[mid]) / 2.0
         else:
-            return sorted_data[length//2]
+            return sorted_data[mid]
         
         
 class MarketDataStore:
@@ -283,9 +280,8 @@ class MarketDataStore:
         symbol = data['s']
         cls.quote[symbol] = Quote(
             ask=float(data['a']),
-            bid=float(data['b'])
+            bid=float(data['b']),
         )
-        
         spot_symbol = symbol.replace(':USDT', '') if ':' in symbol else symbol
         await cls.calculate_ratio(spot_symbol)
             
@@ -305,48 +301,54 @@ class MarketDataStore:
             # cls.open_ratio[spot_symbol] = linear_bid / spot_ask - 1
             # cls.close_ratio[spot_symbol] = linear_ask / spot_bid - 1
             
-            cls.open_ratio[spot_symbol] = cls.open_rolling_median[spot_symbol].input(linear_ask / spot_ask - 1)
-            cls.close_ratio[spot_symbol] = cls.close_rolling_median[spot_symbol].input(linear_bid / spot_bid - 1)
+            cls.open_ratio[spot_symbol] = cls.open_rolling_median[spot_symbol].input(linear_bid / spot_ask - 1)
+            cls.close_ratio[spot_symbol] = cls.close_rolling_median[spot_symbol].input(linear_ask / spot_bid - 1)
             
             await EventSystem.emit('ratio_changed', spot_symbol, cls.open_ratio[spot_symbol], cls.close_ratio[spot_symbol])
 
 
 class LogRegister:
+    """
+    1. spdlog.DailyLogger(name: str, filename: str, multithreaded: bool = False, hour: int = 0, minute: int = 0)
+    2. spdlog.DailyLogger(name: str, filename: str, multithreaded: bool = False, hour: int = 0, minute: int = 0, async_mode: bool)
+    """
     def __init__(self, log_dir=".logs"):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.loggers = {}
         
-        logger.remove()
-        self.setup_global_logging()
-        self.setup_exception_handling()
+        self.setup_error_handling()
+    
+    def setup_error_handling(self):
+        self.error_logger = self.get_logger('error', level='ERROR', flush=True)
 
-    def setup_global_logging(self, level: Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] = 'INFO'):
-
-        logger.add(sys.stderr, level=level)
-        logger.add(str(self.log_dir / "log.log"), level=level, rotation="1 day")
-        logger.add(str(self.log_dir / "error.log"), level="ERROR", rotation="1 day")
-
-    def setup_exception_handling(self):
         def handle_exception(exc_type, exc_value, exc_traceback):
             if issubclass(exc_type, KeyboardInterrupt):
                 sys.__excepthook__(exc_type, exc_value, exc_traceback)
                 return
-            logger.opt(exception=(exc_type, exc_value, exc_traceback)).error("Uncaught exception:")
+            self.error_logger.error(str(exc_value))
+            self.error_logger.error("Traceback:", exc_info=(exc_type, exc_value, exc_traceback))
+
         sys.excepthook = handle_exception
-        logger.add(lambda _: None, level="ERROR", backtrace=True, diagnose=True)
 
-    def get_logger(self, class_name, level: Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] = 'INFO'):
-        if class_name not in self.loggers:
-            log_file = self.log_dir / f"{class_name}.log"
-            logger_instance = logger.bind(class_name=class_name)
-            logger.add(str(log_file), 
-                       filter=lambda record: record["extra"].get("class_name") == class_name,
-                       rotation="1 day",
-                       level=level)
-            self.loggers[class_name] = logger_instance
-        return self.loggers[class_name]
-
+    def get_logger(self, name, level: Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] = 'INFO', flush: bool = False):
+        if name not in self.loggers:
+            logger_instance = spd.DailyLogger(name = name, filename = str(self.log_dir / f"{name}.log"), hour = 0, minute = 0, async_mode=True)
+            logger_instance.set_level(self.parse_level(level))
+            if flush:
+                logger_instance.flush_on(self.parse_level(level))
+            self.loggers[name] = logger_instance
+        return self.loggers[name]
+    
+    def parse_level(self, level: Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']):
+        levels = {
+            'DEBUG': spd.LogLevel.DEBUG,
+            'INFO': spd.LogLevel.INFO,
+            'WARNING': spd.LogLevel.WARN,
+            'ERROR': spd.LogLevel.ERR,
+            'CRITICAL': spd.LogLevel.CRITICAL
+        }
+        return levels[level]
 
 
 context = Context()

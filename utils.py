@@ -13,11 +13,10 @@ from typing import Literal, Dict
 from decimal import Decimal, ROUND_HALF_UP, ROUND_CEILING, ROUND_FLOOR
 
 
-from entity import Context
-from entity import log_register
+from entity import Context, log_register
 
 
-logger = log_register.get_logger('utils', level='INFO')
+logger = log_register.get_logger('utils', level='DEBUG', flush=True)
 
 
 async def get_listen_key(base_url: str, api_key: str):
@@ -153,7 +152,3 @@ def amount_to_precision(symbol: str, amount: float, mode: Literal['round', 'ceil
     elif mode == 'floor':
         return amount.quantize(precision, rounding=ROUND_FLOOR)
     
-    
-   
-
-

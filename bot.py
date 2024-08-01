@@ -12,7 +12,7 @@ from entity import EventSystem, MarketDataStore, OrderResponse
 from manager import NatsManager, OrderManager, ExchangeManager, AccountManager
 
 class TradingBot:
-    logger = log_register.get_logger('bot', level='INFO')
+    logger = log_register.get_logger('bot', level='INFO', flush=True)
     
     def __init__(self, config):
         self._config = config
@@ -57,6 +57,7 @@ class Bot(TradingBot):
         super().__init__(config)
         self.client_id = generate_client_order_id()
         self.order_ids = {}
+        self.trade_log = log_register.get_logger('trade', level='INFO')
         context.openpx = defaultdict(float)
         context.level_time = defaultdict(int)
         self.pending_tasks: Dict[str, asyncio.Task] = {}
@@ -96,7 +97,7 @@ class Bot(TradingBot):
                 res = await self.order_spot(order, symbol, amount)
                 spot_average = res['average']
                 context.openpx[symbol] =  linear_average/spot_average - 1
-                self.logger.info(f'[FILLED ORDER] id: {id} Symbol: {symbol} Amount: {amount} Filled: {res['filled']} Basis: {context.openpx[symbol]}')
+                self.logger.info(f'[FILLED ORDER] id: {id} Symbol: {symbol} Amount: {amount} Filled: {res["filled"]} Basis: {context.openpx[symbol]}')
                 self.order_ids.pop(id, None)
             else:
                 self.logger.info(f'[SOCKET DELAY] Symbol: {symbol} already filled')
@@ -166,7 +167,7 @@ class Bot(TradingBot):
             context.position.update(symbol, amount, spot_ask)
             context.position.update(linear_symbol, -amount, linear_ask)
             
-        context.openpx[symbol] = open_ratio    
+        context.openpx[symbol] = open_ratio
         self.logger.info(f'[FILLED ORDER]: {symbol} ratio: {open_ratio}')
             
     
@@ -176,7 +177,7 @@ class Bot(TradingBot):
         symbol: str, # spot
         amount: float = None,
         notional: float = None,
-        time_interval: int = 0.01,
+        time_interval: int = 0.05,
         close_position: bool = False,
         open_ratio: float = None,
         wait: int = 60 * 10,
@@ -200,7 +201,7 @@ class Bot(TradingBot):
         remain_amount = 0
         while True:
             if time.time() - start_time > wait:
-                self.logger.debug(f"Operation for {symbol} timed out after {wait} seconds. Cancelling order if exists.")
+                self.trade_log.info(f"Operation for {symbol} timed out after {wait} seconds. Cancelling order if exists.")
                 if order_placed and res:
                     try:
                         await self._order.cancel_order(res['id'], linear_symbol)
@@ -214,8 +215,8 @@ class Bot(TradingBot):
             curr_linear_bid = MarketDataStore.quote[linear_symbol].bid
             curr_linear_ask = MarketDataStore.quote[linear_symbol].ask
             
-            ratio = curr_linear_ask / curr_spot_ask - 1 if not close_position else curr_linear_bid / curr_spot_bid - 1
-            self.logger.debug(f"symbol: {symbol}, ratio: {ratio}, open_ratio: {open_ratio}, spot_bid: {curr_spot_bid}, spot_ask: {curr_spot_ask}, linear_bid: {curr_linear_bid}, linear_ask: {curr_linear_ask}")
+            ratio = curr_linear_bid / curr_spot_ask - 1 if not close_position else curr_linear_ask / curr_spot_bid - 1
+            self.trade_log.info(f"symbol: {symbol}, ratio: {ratio}, open_ratio: {open_ratio}, spot_bid: {curr_spot_bid}, spot_ask: {curr_spot_ask}, linear_bid: {curr_linear_bid}, linear_ask: {curr_linear_ask}")
             if not order_placed:
                 amount = remain_amount if remain_amount > 0 else amount
                 if close_position:
@@ -267,7 +268,7 @@ class Bot(TradingBot):
                         else:
                             return False
                     else:
-                        self.logger.debug(f"Price: {curr_price} has not changed for {linear_symbol}.")
+                        self.trade_log.info(f"Price: {curr_price} has not changed for {linear_symbol}.")
             else:
                 if order_placed and curr_spot_ask != spot_ask:
                     curr_price = (open_ratio + 1) * curr_spot_ask
@@ -282,7 +283,7 @@ class Bot(TradingBot):
                         else:
                             return False
                     else:
-                        self.logger.debug(f"Price: {curr_price} has not changed for {linear_symbol}.")
+                        self.trade_log.info(f"Price: {curr_price} has not changed for {linear_symbol}.")
             
             # if not res:
             #     return True

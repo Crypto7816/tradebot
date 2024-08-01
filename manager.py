@@ -104,7 +104,7 @@ class ExchangeManager:
 
 
 class AccountManager:
-    logger = log_register.get_logger('account', level='INFO')
+    logger = log_register.get_logger('account', level='INFO', flush=True)
     
     def __init__(self):
         EventSystem.on('account_update', self._on_account_update)
@@ -125,7 +125,7 @@ class AccountManager:
             
 
 class OrderManager:
-    logger = log_register.get_logger('order', level='INFO')
+    logger = log_register.get_logger('order', level='INFO', flush=True)
     
     def __init__(self, exchange: ExchangeManager):
         self._exchange = exchange
